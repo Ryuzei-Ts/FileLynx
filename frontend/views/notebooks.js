@@ -1,164 +1,197 @@
-let currentNotebook = null;
+let notesList = [];
+let activeNote = null;
 
 export async function renderNotebooks(container) {
+  notesList = [];
+  activeNote = null;
+
   container.innerHTML = `
-    <div class="panel-box">
+    <div class="panel-box" id="notesListContainer">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-        <h3 style="font-size:1.1rem; font-weight:800;">Notebooks Interactivos</h3>
-        <button class="btn-full" style="width:auto; padding:8px 16px;" id="btnNewNotebook">+ Crear Notebook</button>
+        <h3 style="font-size:1.3rem; font-weight:800;"><i class="fas fa-sticky-note" style="color:var(--price-color);"></i> Notas</h3>
+        <button class="btn-full" style="width:auto; padding:8px 16px;" id="btnCreateNewNote">
+          <i class="fas fa-pen"></i> Nueva Nota
+        </button>
       </div>
-      <div id="notebooksIndex">Cargando notebooks...</div>
-      <div id="activeNotebookArea" style="display:none; margin-top:20px;"></div>
+
+      <div class="notes-search-box">
+        <i class="fas fa-search" style="color:var(--text-gray); font-size:0.8rem;"></i>
+        <input type="text" id="noteSearchInput" placeholder="Buscar en todas las notas..." />
+      </div>
+
+      <div class="notes-list" id="notesItemsWrapper">
+        <p style="padding:16px; color:var(--text-gray); text-align:center;">Cargando notas...</p>
+      </div>
+    </div>
+
+    <!-- Vista de edición de nota (iPhone style) -->
+    <div class="note-editor-view" id="noteEditorContainer" style="display:none;">
+      <div class="note-editor-header">
+        <button class="stat-btn" id="btnBackToNotes"><i class="fas fa-chevron-left"></i> Notas</button>
+        <span style="font-size:0.75rem; color:var(--text-gray); font-weight:700;" id="noteWordCount">0 palabras</span>
+        <div style="display:flex; gap:6px;">
+          <button class="stat-btn" id="btnDeleteCurrentNote" style="color:#ef4444;"><i class="fas fa-trash"></i></button>
+          <button class="btn-full" style="width:auto; padding:8px 18px;" id="btnSaveCurrentNote">Guardar</button>
+        </div>
+      </div>
+      <input type="text" class="note-title-input" id="editNoteTitle" placeholder="Título de la nota..." />
+      <textarea class="note-body-textarea" id="editNoteContent" placeholder="Empieza a escribir aquí..."></textarea>
     </div>
   `;
 
-  document.getElementById('btnNewNotebook').onclick = () => {
-    document.getElementById('nbTitleInput').value = '';
-    document.getElementById('nbInitialCodeInput').value = 'console.log("Hola desde VPS!");';
-    document.getElementById('modalNewNotebook').classList.add('active');
+  document.getElementById('btnCreateNewNote').onclick = () => {
+    openNoteEditor({ id: '', title: '', content: '', updatedAt: new Date().toISOString() });
   };
 
-  document.getElementById('btnConfirmNewNotebook').onclick = () => {
-    const title = document.getElementById('nbTitleInput').value.trim() || 'Script de automatización';
-    const initCode = document.getElementById('nbInitialCodeInput').value;
-    document.getElementById('modalNewNotebook').classList.remove('active');
-    openNotebook({ id: '', title, cells: [{ id: '1', type: 'code', content: initCode }] });
+  document.getElementById('btnBackToNotes').onclick = () => {
+    document.getElementById('noteEditorContainer').style.display = 'none';
+    document.getElementById('notesListContainer').style.display = 'block';
+    loadNotes();
   };
 
-  loadNotebooks();
+  document.getElementById('btnSaveCurrentNote').onclick = saveActiveNote;
+  document.getElementById('btnDeleteCurrentNote').onclick = deleteActiveNote;
+
+  document.getElementById('noteSearchInput').oninput = (e) => {
+    filterNotes(e.target.value);
+  };
+
+  document.getElementById('editNoteContent').oninput = updateWordCount;
+
+  loadNotes();
 }
 
-async function loadNotebooks() {
-  const index = document.getElementById('notebooksIndex');
+async function loadNotes() {
   try {
     const res = await fetch('/api/notebooks');
     const data = await res.json();
-    index.innerHTML = '';
-
-    if (!data.notebooks || data.notebooks.length === 0) {
-      index.innerHTML = '<p style="color:var(--text-gray);">No hay notebooks creados.</p>';
-      return;
-    }
-
-    data.notebooks.forEach((nb) => {
-      const item = document.createElement('div');
-      item.className = 'file-row';
-      item.innerHTML = `
-        <div>
-          <b>${nb.title}</b>
-          <div style="font-size:0.75rem; color:var(--text-gray);">${nb.cells.length} celdas &bull; ${nb.updatedAt}</div>
-        </div>
-        <div style="display:flex; gap:6px;">
-          <button class="stat-btn btn-open">Abrir</button>
-          <button class="stat-btn btn-del" style="color:#ef4444;">Eliminar</button>
-        </div>
-      `;
-      item.querySelector('.btn-open').onclick = () => openNotebook(nb);
-      item.querySelector('.btn-del').onclick = () => {
-        document.getElementById('deleteItemPromptText').innerText = `¿Estás seguro de que deseas eliminar el notebook "${nb.title}"?`;
-        document.getElementById('modalDeleteConfirm').classList.add('active');
-        document.getElementById('btnConfirmDelete').onclick = async () => {
-          document.getElementById('modalDeleteConfirm').classList.remove('active');
-          await fetch(`/api/notebooks/${nb.id}`, { method: 'DELETE' });
-          loadNotebooks();
-        };
-      };
-      index.appendChild(item);
-    });
+    notesList = data.notebooks || [];
+    renderNotesList(notesList);
   } catch (err) {
-    index.innerHTML = `<p style="color:#ef4444;">Error: ${err.message}</p>`;
+    document.getElementById('notesItemsWrapper').innerHTML = `<p style="padding:16px; color:#ef4444;">Error al cargar notas: ${err.message}</p>`;
   }
 }
 
-function openNotebook(nb) {
-  currentNotebook = nb;
-  document.getElementById('notebooksIndex').style.display = 'none';
-  const area = document.getElementById('activeNotebookArea');
-  area.style.display = 'block';
+function renderNotesList(list) {
+  const wrapper = document.getElementById('notesItemsWrapper');
+  if (!wrapper) return;
+  wrapper.innerHTML = '';
 
-  area.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
-      <h3 style="font-weight:800;">${nb.title}</h3>
-      <div style="display:flex; gap:6px;">
-        <button class="stat-btn" id="btnBackIndex">Volver</button>
-        <button class="stat-btn" id="btnAddCodeCell">+ Celda Código</button>
-        <button class="btn-full" style="width:auto; padding:6px 14px;" id="btnSaveNotebook">Guardar</button>
-      </div>
-    </div>
-    <div id="cellsList"></div>
-  `;
+  if (list.length === 0) {
+    wrapper.innerHTML = '<p style="padding:24px; color:var(--text-gray); text-align:center;">No hay notas creadas. Pulsa "Nueva Nota" para comenzar.</p>';
+    return;
+  }
 
-  document.getElementById('btnBackIndex').onclick = () => {
-    area.style.display = 'none';
-    document.getElementById('notebooksIndex').style.display = 'block';
-    loadNotebooks();
-  };
+  list.forEach((note) => {
+    const item = document.createElement('div');
+    item.className = 'note-card-item';
 
-  document.getElementById('btnAddCodeCell').onclick = () => {
-    currentNotebook.cells.push({ id: String(Date.now()), type: 'code', content: '' });
-    renderCells();
-  };
+    let preview = 'Sin texto adicional';
+    if (typeof note.cells === 'string') {
+      preview = note.cells;
+    } else if (Array.isArray(note.cells) && note.cells[0]?.content) {
+      preview = note.cells[0].content;
+    }
 
-  document.getElementById('btnSaveNotebook').onclick = async () => {
-    await fetch('/api/notebooks/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(currentNotebook),
-    });
-    window.showToast?.('Notebook guardado exitosamente ꕤ');
-  };
+    const dateStr = note.updatedAt ? new Date(note.updatedAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }) : 'Hoy';
 
-  renderCells();
-}
-
-function renderCells() {
-  const container = document.getElementById('cellsList');
-  container.innerHTML = '';
-
-  currentNotebook.cells.forEach((cell, idx) => {
-    const box = document.createElement('div');
-    box.style.border = '1px solid var(--border)';
-    box.style.borderRadius = '12px';
-    box.style.padding = '12px';
-    box.style.marginBottom = '12px';
-    box.style.background = 'var(--bg-params)';
-
-    box.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <span style="font-size:0.75rem; font-weight:800; color:var(--text-gray);">In [${idx + 1}]:</span>
-        <div style="display:flex; gap:6px;">
-          <button class="stat-btn btn-run" style="background:var(--primary); color:#fff;"><i class="fas fa-play"></i> Ejecutar</button>
-          <button class="stat-btn btn-remove" style="color:#ef4444;"><i class="fas fa-trash"></i></button>
+    item.innerHTML = `
+      <div style="flex:1; overflow:hidden; padding-right:12px;">
+        <div class="note-card-title">${escapeHtml(note.title || 'Nota sin título')}</div>
+        <div class="note-card-snippet">
+          <span class="note-card-date">${dateStr}</span>
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(preview)}</span>
         </div>
       </div>
-      <textarea class="param-input cell-editor" style="height:100px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; background:var(--bg-card);">${cell.content || ''}</textarea>
-      <div class="cell-output" style="margin-top:8px; padding:10px; border-radius:8px; background:#f4f6f9; color:#1d4ed8; font-family:'JetBrains Mono', monospace; font-size:0.8rem; white-space:pre-wrap; display:${cell.output ? 'block' : 'none'};">${cell.output || ''}</div>
+      <i class="fas fa-chevron-right" style="color:var(--text-gray); font-size:0.75rem;"></i>
     `;
 
-    const editor = box.querySelector('.cell-editor');
-    editor.oninput = () => {
-      cell.content = editor.value;
-    };
-
-    box.querySelector('.btn-run').onclick = async () => {
-      const outBox = box.querySelector('.cell-output');
-      outBox.style.display = 'block';
-      outBox.textContent = 'Ejecutando...';
-      const res = await fetch('/api/notebooks/execute-cell', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: cell.content }),
-      });
-      const d = await res.json();
-      cell.output = d.output;
-      outBox.textContent = d.output;
-    };
-
-    box.querySelector('.btn-remove').onclick = () => {
-      currentNotebook.cells.splice(idx, 1);
-      renderCells();
-    };
-
-    container.appendChild(box);
+    item.onclick = () => openNoteEditor(note);
+    wrapper.appendChild(item);
   });
+}
+
+function filterNotes(query) {
+  const q = query.toLowerCase().trim();
+  const filtered = notesList.filter((n) => {
+    const t = (n.title || '').toLowerCase();
+    const c = typeof n.cells === 'string' ? n.cells.toLowerCase() : JSON.stringify(n.cells).toLowerCase();
+    return t.includes(q) || c.includes(q);
+  });
+  renderNotesList(filtered);
+}
+
+function openNoteEditor(note) {
+  activeNote = note;
+  document.getElementById('notesListContainer').style.display = 'none';
+  const editor = document.getElementById('noteEditorContainer');
+  editor.style.display = 'flex';
+
+  document.getElementById('editNoteTitle').value = note.title || '';
+
+  let body = '';
+  if (typeof note.cells === 'string') {
+    body = note.cells;
+  } else if (Array.isArray(note.cells)) {
+    body = note.cells.map((c) => c.content || '').join('\n');
+  }
+
+  document.getElementById('editNoteContent').value = body;
+  updateWordCount();
+}
+
+function updateWordCount() {
+  const text = document.getElementById('editNoteContent').value.trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  const chars = text.length;
+  document.getElementById('noteWordCount').innerText = `${words} palabras, ${chars} caracteres`;
+}
+
+async function saveActiveNote() {
+  const title = document.getElementById('editNoteTitle').value.trim() || 'Nota sin título';
+  const content = document.getElementById('editNoteContent').value;
+
+  const payload = {
+    id: activeNote?.id || '',
+    title,
+    cells: [{ id: '1', type: 'text', content }],
+  };
+
+  try {
+    const res = await fetch('/api/notebooks/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const saved = await res.json();
+    activeNote = saved;
+    window.showToast?.('Nota guardada ꕤ');
+  } catch {
+    window.showToast?.('Error al guardar la nota');
+  }
+}
+
+async function deleteActiveNote() {
+  if (!activeNote?.id) {
+    document.getElementById('btnBackToNotes').click();
+    return;
+  }
+
+  if (confirm(`¿Eliminar permanentemente "${activeNote.title || 'esta nota'}"?`)) {
+    try {
+      await fetch(`/api/notebooks/${activeNote.id}`, { method: 'DELETE' });
+      window.showToast?.('Nota eliminada ✰');
+      document.getElementById('btnBackToNotes').click();
+    } catch {
+      window.showToast?.('Error al eliminar');
+    }
+  }
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
