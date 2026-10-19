@@ -78,15 +78,15 @@ router.post('/rename', async (req: Request, res: Response): Promise<void> => {
 
 router.post('/move', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sourcePath, destinationFolder } = req.body;
-    if (!sourcePath || destinationFolder === undefined) {
-      res.status(400).json({ error: 'Ruta de origen y carpeta de destino requeridas' });
+    const { sourcePath, destinationDir } = req.body;
+    if (!sourcePath || destinationDir === undefined) {
+      res.status(400).json({ error: 'Ruta origen y directorio destino requeridos' });
       return;
     }
-    await filesService.move(sourcePath, destinationFolder);
+    await filesService.move(sourcePath, destinationDir);
     res.json({ success: true });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error desconocido';
+    const message = err instanceof Error ? err.message : 'Error al mover elemento';
     res.status(500).json({ error: message });
   }
 });
@@ -154,15 +154,15 @@ router.post('/github-import', async (req: Request, res: Response): Promise<void>
 
 router.post('/git-push', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { path: repoPath, message, token, user, repoUrl } = req.body;
-    if (!repoUrl) {
-      res.status(400).json({ error: 'URL remota requerida' });
+    const { folderPath, repoUrl, token, commitMsg, branch } = req.body;
+    if (!repoUrl || !token) {
+      res.status(400).json({ error: 'Se requiere la URL del repositorio y el Token de GitHub' });
       return;
     }
-    const output = await filesService.gitPushRepo(repoPath || '', message, token, user, repoUrl);
+    const output = await filesService.gitPush(folderPath || '', repoUrl, token, commitMsg, branch);
     res.json({ success: true, output });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Fallo en git push';
+    const message = err instanceof Error ? err.message : 'Error en Git Push';
     res.status(500).json({ error: message });
   }
 });
