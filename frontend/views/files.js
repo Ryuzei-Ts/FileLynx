@@ -7,7 +7,6 @@ export async function renderFiles(container, initialPath = '') {
   updateContextButtonState();
 
   container.innerHTML = `
-    <!-- Barra de progreso para cargas/descargas -->
     <div class="progress-card" id="taskProgressBar">
       <div class="progress-header">
         <h4 style="font-size:0.85rem; font-weight:800;" id="progTitle">Operación en curso</h4>
@@ -21,39 +20,45 @@ export async function renderFiles(container, initialPath = '') {
       </div>
     </div>
 
-    <!-- Inputs ocultos para subida de archivos y carpetas -->
     <input class="u-input" type="file" id="fileUploadInput" multiple style="display:none;" />
     <input class="u-input" type="file" id="folderUploadInput" webkitdirectory directory multiple style="display:none;" />
 
-    <!-- Panel de Exploración -->
+    <div class="modal" id="modalImportCenter">
+      <div class="modal-content" style="max-width:380px; text-align:center;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
+          <button class="stat-btn" onclick="document.getElementById('modalImportCenter').classList.remove('active')">✕</button>
+        </div>
+        <div class="u-icon" style="margin:0 auto 14px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+            <path d="M5 16V18C5 19.1 5.9 20 7 20H17C18.1 20 19 19.1 19 18V16" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+          </svg>
+        </div>
+        <div class="u-title">Subir Archivos y Carpetas</div>
+        <div class="u-text">
+          Sube recursos directamente a la VPS o descarga código desde GitHub.
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:16px;">
+          <button class="btn-full" onclick="pickImport('files')">+ Subir Archivos</button>
+          <button class="btn-full" style="background:var(--bg-params); color:var(--text-dark); border:1px solid var(--border);" onclick="pickImport('folder')">+ Subir Carpeta</button>
+          <button class="btn-full" style="background:var(--bg-params); color:var(--text-dark); border:1px solid var(--border);" onclick="pickImport('github')"><i class="fab fa-github"></i> Importar GitHub</button>
+        </div>
+      </div>
+    </div>
+
     <div class="panel-box">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
         <div style="display:flex; gap:8px; flex:1; min-width:240px;">
-          <input type="text" id="dirInput" class="param-input" value="${currentDirectory}" placeholder="/ruta"/>
-          <button class="stat-btn" id="btnGo"><i class="fas fa-level-up-alt"></i> Ir</button>
+          <input type="text" id="dirInput" class="param-input" value="${currentDirectory}" placeholder="/ruta" readonly/>
+          <button class="stat-btn" id="btnBackDir"><i class="fas fa-arrow-left"></i> Volver</button>
         </div>
         
         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
           <button class="stat-btn" id="btnNewFile"><i class="fas fa-file-plus"></i> + Archivo</button>
           <button class="stat-btn" id="btnNewDir"><i class="fas fa-folder-plus"></i> + Carpeta</button>
-          
-          <!-- Botón Importar con menú flotante -->
-          <div class="import-dropdown-wrapper">
-            <button class="stat-btn" id="btnImportMenu" style="background:var(--primary); color:#ffffff; border-color:var(--primary);">
-              <i class="fas fa-cloud-upload-alt"></i> Importar <i class="fas fa-chevron-down" style="font-size:0.65rem; margin-left:4px;"></i>
-            </button>
-            <div class="import-floating-menu" id="importFloatingMenu">
-              <div class="menu-item" onclick="triggerImportOption('files')">
-                <i class="fas fa-file-upload text-primary"></i> Subir Archivos
-              </div>
-              <div class="menu-item" onclick="triggerImportOption('folder')">
-                <i class="fas fa-folder-upload" style="color:var(--price-color);"></i> Subir Carpeta
-              </div>
-              <div class="menu-item" onclick="triggerImportOption('github')">
-                <i class="fab fa-github"></i> Importar GitHub
-              </div>
-            </div>
-          </div>
+          <button class="stat-btn" id="btnOpenImport" style="background:var(--primary); color:#ffffff; border-color:var(--primary);">
+            <i class="fas fa-cloud-upload-alt"></i> Importar
+          </button>
         </div>
       </div>
 
@@ -61,23 +66,23 @@ export async function renderFiles(container, initialPath = '') {
     </div>
   `;
 
-  document.getElementById('btnGo').onclick = () => loadDir(document.getElementById('dirInput').value);
+  document.getElementById('btnBackDir').onclick = () => {
+    if (!currentDirectory || currentDirectory === '/' || currentDirectory === '.') {
+      loadDir('');
+      return;
+    }
+    const clean = currentDirectory.replace(/\/+$/, '');
+    const lastSlash = clean.lastIndexOf('/');
+    const parentPath = lastSlash !== -1 ? clean.substring(0, lastSlash) : '';
+    loadDir(parentPath);
+  };
+
   document.getElementById('btnNewFile').onclick = createPromptFile;
   document.getElementById('btnNewDir').onclick = createPromptFolder;
 
-  // Toggle del menú desplegable Importar
-  const importBtn = document.getElementById('btnImportMenu');
-  const importMenu = document.getElementById('importFloatingMenu');
-  importBtn.onclick = (e) => {
-    e.stopPropagation();
-    importMenu.classList.toggle('open');
+  document.getElementById('btnOpenImport').onclick = () => {
+    document.getElementById('modalImportCenter').classList.add('active');
   };
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.import-dropdown-wrapper')) {
-      importMenu?.classList.remove('open');
-    }
-  });
 
   document.getElementById('fileUploadInput').onchange = (e) => handleUpload(e.target.files);
   document.getElementById('folderUploadInput').onchange = (e) => handleUpload(e.target.files);
@@ -85,8 +90,8 @@ export async function renderFiles(container, initialPath = '') {
   loadDir(currentDirectory);
 }
 
-window.triggerImportOption = function (type) {
-  document.getElementById('importFloatingMenu')?.classList.remove('open');
+window.pickImport = function(type) {
+  document.getElementById('modalImportCenter').classList.remove('active');
   if (type === 'files') {
     document.getElementById('fileUploadInput').click();
   } else if (type === 'folder') {
@@ -98,10 +103,13 @@ window.triggerImportOption = function (type) {
 
 async function loadDir(dirPath) {
   currentDirectory = dirPath;
+  const dirInput = document.getElementById('dirInput');
+  if (dirInput) dirInput.value = currentDirectory;
   activeSelectedFile = null;
   updateContextButtonState();
 
   const listContainer = document.getElementById('fileEntriesList');
+  if (!listContainer) return;
   listContainer.innerHTML = '<p style="padding:10px; color:var(--text-gray);">Consultando VPS...</p>';
 
   try {
@@ -135,7 +143,7 @@ async function loadDir(dirPath) {
 
       row.ondblclick = () => {
         if (file.isDirectory) {
-          renderFiles(document.getElementById('view-container'), file.path);
+          loadDir(file.path);
         } else {
           openEditor(file.path);
         }
