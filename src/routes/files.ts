@@ -207,13 +207,13 @@ router.post('/github-import', async (req: Request, res: Response): Promise<void>
   }
 });
 
-router.post('/git-push', async (req: Request, res: Response): Promise<void> => {
+router.post('/git-pull', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { folderPath, repoUrl, token, commitMsg, branch } = req.body;
-    const output = await filesService.gitPush(folderPath || '', repoUrl, token, commitMsg, branch);
+    const { folderPath, repoUrl, token, branch } = req.body;
+    const output = await filesService.gitPull(folderPath || '', repoUrl, token, branch);
     res.json({ success: true, output });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error en Git Push';
+    const message = err instanceof Error ? err.message : 'Error en Git Pull';
     res.status(500).json({ error: message });
   }
 });
