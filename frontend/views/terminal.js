@@ -1,22 +1,27 @@
 let terminalSocket = null;
 
+function cleanAnsi(str) {
+  return str
+    .replace(/\x1b\]0;[^\x07]*\x07/g, '')
+    .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+    .replace(/\x07/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+}
+
 export function renderTerminal(container) {
   container.innerHTML = `
     <div class="panel-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-size:1.05rem; font-weight:800; color:var(--text-dark);">Terminal</h3>
-        
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="stat-btn" id="btnTermReconnect" title="Reiniciar sesión WebSocket"><i class="fas fa-sync-alt"></i> Reconectar</button>
-          <button class="stat-btn" id="btnTermClear" title="Limpiar pantalla"><i class="fas fa-eraser"></i> Limpiar</button>
-          <button class="stat-btn" id="btnTermSigint" style="color:#ef4444;" title="Enviar Ctrl+C"><i class="fas fa-stop"></i> Ctrl+C</button>
-          <button class="stat-btn" onclick="sendQuickCommand('pm2 status\\n')">pm2 status</button>
-          <button class="stat-btn" onclick="sendQuickCommand('git status\\n')">git status</button>
+        <div style="display:flex; gap:6px;">
+          <button class="stat-btn" id="btnTermClear"><i class="fas fa-eraser"></i> Clean</button>
+          <button class="stat-btn" id="btnTermSigint" style="color:#ef4444;"><i class="fas fa-stop"></i> CTRL C</button>
         </div>
       </div>
 
       <div class="terminal-box" id="termOutput">Iniciando sesión PTY...\n</div>
-      
+
       <div style="display:flex; gap:8px; margin-top:12px;">
         <input type="text" id="termInput" class="param-input" placeholder="Escribe un comando bash y presiona Enter..." style="font-family:'JetBrains Mono', monospace; flex:1;"/>
         <button class="stat-btn" id="btnSendCmd" style="background:var(--primary); color:#fff; border-color:var(--primary); padding:0 18px;">Enviar</button>
@@ -44,7 +49,8 @@ export function renderTerminal(container) {
     };
 
     terminalSocket.onmessage = (event) => {
-      output.textContent += event.data;
+      const sanitized = cleanAnsi(event.data);
+      output.textContent += sanitized;
       output.scrollTop = output.scrollHeight;
     };
 
@@ -66,12 +72,6 @@ export function renderTerminal(container) {
     input.value = '';
   }
 
-  window.sendQuickCommand = function (cmd) {
-    if (terminalSocket && terminalSocket.readyState === WebSocket.OPEN) {
-      terminalSocket.send(cmd);
-    }
-  };
-
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendCommand();
   });
@@ -79,10 +79,6 @@ export function renderTerminal(container) {
 
   document.getElementById('btnTermClear').onclick = () => {
     output.textContent = '';
-  };
-
-  document.getElementById('btnTermReconnect').onclick = () => {
-    connectSocket();
   };
 
   document.getElementById('btnTermSigint').onclick = () => {
