@@ -193,52 +193,30 @@ html, body {
   stroke: #ffffff;
 }
 
-.import-dropdown-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.import-floating-menu {
-  display: none;
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 210px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border);
+.u-icon {
+  width: 52px;
+  height: 52px;
   border-radius: 14px;
-  padding: 8px 0;
-  box-shadow: var(--shadow-md);
-  z-index: 1100;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.import-floating-menu.open {
-  display: flex;
-}
-
-.import-floating-menu .menu-item {
+  background: var(--bg-params);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 14px;
-  color: var(--text-dark);
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.import-floating-menu .menu-item:hover {
-  background: var(--pink-soft);
+  justify-content: center;
   color: var(--primary);
+  border: 1px solid var(--border);
 }
 
-.import-floating-menu .menu-item i {
-  width: 18px;
-  text-align: center;
-  font-size: 0.95rem;
+.u-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 6px;
+}
+
+.u-text {
+  font-size: 13px;
+  color: var(--text-gray);
+  line-height: 1.45;
+  margin-bottom: 14px;
 }
 
 .sidebar {
