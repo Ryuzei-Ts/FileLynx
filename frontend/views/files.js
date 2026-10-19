@@ -1,6 +1,17 @@
 let currentDirectory = '';
 let activeTargetFile = null;
 
+function formatBytes(bytes, decimals = 2) {
+  const num = Number(bytes);
+  if (!num || isNaN(num) || num <= 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.floor(Math.log(num) / Math.log(k));
+  const idx = Math.min(i, sizes.length - 1);
+  return `${parseFloat((num / Math.pow(k, idx)).toFixed(dm))} ${sizes[idx]}`;
+}
+
 function showAppDialog(title, message, isError = false) {
   const modal = document.getElementById('modalAppAlert');
   if (!modal) return;
@@ -200,6 +211,8 @@ async function loadDir(dirPath) {
     data.files.forEach((file) => {
       const row = document.createElement('div');
       row.className = 'file-row';
+      const sizeText = file.isDirectory ? 'Directorio' : formatBytes(file.size);
+
       row.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; flex:1; overflow:hidden;">
           <i class="${file.isDirectory ? 'fas fa-folder text-primary' : (file.isArchive ? 'fas fa-file-archive' : 'fas fa-file')}" style="color:${file.isDirectory ? '#2563eb' : (file.isArchive ? '#f59e0b' : '#64748b')}"></i>
@@ -207,7 +220,7 @@ async function loadDir(dirPath) {
           ${file.hasGit ? '<span style="font-size:0.65rem; background:rgba(37,99,235,0.15); color:var(--primary); padding:2px 6px; border-radius:4px; font-weight:800;">GIT</span>' : ''}
         </div>
         <div style="display:flex; align-items:center; gap:12px;">
-          <span style="font-size:0.75rem; color:var(--text-gray);">${file.isDirectory ? 'Directorio' : `${file.size} B`}</span>
+          <span style="font-size:0.75rem; color:var(--text-gray);">${sizeText}</span>
           <button class="stat-btn btn-row-menu" style="padding:4px 8px;" title="Opciones">
             <i class="fas fa-ellipsis-h"></i>
           </button>
@@ -541,6 +554,7 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
       showAppDialog('Fallo al Importar', errText, true);
     }
   } catch {
+    document.getElementById('cybercomProgress')?.classList.remove('active');
     showAppDialog('Error de Red', 'Fallo de conexión al importar desde GitHub', true);
   }
 };
