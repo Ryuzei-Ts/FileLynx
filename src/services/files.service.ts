@@ -170,22 +170,39 @@ export const filesService = {
       throw new Error('Formato de repositorio inválido. Debe ser: usuario/repositorio');
     }
 
-    const cloneUrl = token && token.trim()
-      ? `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`
-      : `https://github.com/${owner}/${repo}.git`;
-
     const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
     const destinationPath = path.join(targetFolder, repo);
 
-    const cmd = `git clone --depth 1 ${branchArg} "${cloneUrl}" "${destinationPath}"`;
+    // Limpiar si ya existe carpeta previa
     try {
-      await execAsync(cmd);
-    } catch (err: any) {
-      if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed'))) {
+      await fs.rm(destinationPath, { recursive: true, force: true });
+    } catch {}
+
+    // Intentar primero clonación pública estándar
+    const publicUrl = `https://github.com/${owner}/${repo}.git`;
+    const publicCmd = `git clone --depth 1 ${branchArg} "${publicUrl}" "${destinationPath}"`;
+
+    try {
+      await execAsync(publicCmd);
+    } catch (pubErr: any) {
+      // Si falla y tenemos token, reintentar con autenticación privada
+      if (token && token.trim()) {
+        const privateUrl = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+        const privateCmd = `git clone --depth 1 ${branchArg} "${privateUrl}" "${destinationPath}"`;
+        try {
+          await execAsync(privateCmd);
+          return;
+        } catch (privErr: any) {
+          const sanitized = (privErr.message || '').replace(new RegExp(token || '___', 'g'), '***');
+          throw new Error(sanitized);
+        }
+      }
+
+      const errorText = pubErr.message || '';
+      if (errorText.includes('could not read Username') || errorText.includes('Authentication failed') || errorText.includes('Repository not found')) {
         throw new Error('PRIVATE_REPO_AUTH_REQUIRED');
       }
-      const sanitizedMsg = (err.message || '').replace(new RegExp(token || '___', 'g'), '***');
-      throw new Error(sanitizedMsg);
+      throw new Error(errorText);
     }
   },
 
