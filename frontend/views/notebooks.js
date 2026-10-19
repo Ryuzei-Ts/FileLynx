@@ -13,9 +13,16 @@ export async function renderNotebooks(container) {
   `;
 
   document.getElementById('btnNewNotebook').onclick = () => {
-    const title = prompt('Título del notebook:', 'Script de automatización');
-    if (!title) return;
-    openNotebook({ id: '', title, cells: [{ id: '1', type: 'code', content: 'console.log("Hola desde VPS!");' }] });
+    document.getElementById('nbTitleInput').value = '';
+    document.getElementById('nbInitialCodeInput').value = 'console.log("Hola desde VPS!");';
+    document.getElementById('modalNewNotebook').classList.add('active');
+  };
+
+  document.getElementById('btnConfirmNewNotebook').onclick = () => {
+    const title = document.getElementById('nbTitleInput').value.trim() || 'Script de automatización';
+    const initCode = document.getElementById('nbInitialCodeInput').value;
+    document.getElementById('modalNewNotebook').classList.remove('active');
+    openNotebook({ id: '', title, cells: [{ id: '1', type: 'code', content: initCode }] });
   };
 
   loadNotebooks();
@@ -47,11 +54,14 @@ async function loadNotebooks() {
         </div>
       `;
       item.querySelector('.btn-open').onclick = () => openNotebook(nb);
-      item.querySelector('.btn-del').onclick = async () => {
-        if (confirm(`¿Eliminar notebook "${nb.title}"?`)) {
+      item.querySelector('.btn-del').onclick = () => {
+        document.getElementById('deleteItemPromptText').innerText = `¿Estás seguro de que deseas eliminar el notebook "${nb.title}"?`;
+        document.getElementById('modalDeleteConfirm').classList.add('active');
+        document.getElementById('btnConfirmDelete').onclick = async () => {
+          document.getElementById('modalDeleteConfirm').classList.remove('active');
           await fetch(`/api/notebooks/${nb.id}`, { method: 'DELETE' });
           loadNotebooks();
-        }
+        };
       };
       index.appendChild(item);
     });
@@ -95,7 +105,7 @@ function openNotebook(nb) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(currentNotebook),
     });
-    window.showToast?.('Notebook guardado exitosamente');
+    window.showToast?.('Notebook guardado exitosamente ꕤ');
   };
 
   renderCells();
