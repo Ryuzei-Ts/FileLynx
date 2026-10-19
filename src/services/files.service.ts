@@ -1,9 +1,13 @@
 import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { resolveSafePath } from '#utils/paths';
 import type { FileEntry } from '#types';
+
+const execAsync = promisify(exec);
 
 export const filesService = {
   async list(relativeDirectory: string = ''): Promise<FileEntry[]> {
@@ -47,6 +51,14 @@ export const filesService = {
     const oldSafe = resolveSafePath(oldRelativePath);
     const newSafe = resolveSafePath(newRelativePath);
     await fs.rename(oldSafe, newSafe);
+  },
+
+  async move(sourceRelativePath: string, destinationFolderPath: string): Promise<void> {
+    const sourceSafe = resolveSafePath(sourceRelativePath);
+    const destFolderSafe = resolveSafePath(destinationFolderPath);
+    const fileName = path.basename(sourceSafe);
+    const finalDest = path.join(destFolderSafe, fileName);
+    await fs.rename(sourceSafe, finalDest);
   },
 
   async remove(relativeFilePath: string): Promise<void> {
@@ -100,5 +112,31 @@ export const filesService = {
     if (!res.body) throw new Error('Cuerpo de respuesta vacío desde GitHub');
     // @ts-ignore Node stream pipeline
     await pipeline(res.body, createWriteStream(zipPath));
+  },
+
+  async gitPushRepo(relativeDirectory: string, message: string, token: string, user: string, repoUrl: string): Promise<string> {
+    const targetDir = resolveSafePath(relativeDirectory);
+    const hasGit = existsSync(path.join(targetDir, '.git'));
+
+    let remoteWithAuth = repoUrl.replace(/^https?:\/\//, '');
+    if (token && user) {
+      remoteWithAuth = `https://${encodeURIComponent(user)}:${encodeURIComponent(token)}@${remoteWithAuth}`;
+    } else if (token) {
+      remoteWithAuth = `https://${encodeURIComponent(token)}@${remoteWithAuth}`;
+    } else {
+      remoteWithAuth = `https://${remoteWithAuth}`;
+    }
+
+    const safeMessage = (message || 'update from FileLynx').replace(/"/g, '\\"');
+
+    let cmds = '';
+    if (!hasGit) {
+      cmds = `git init && git checkout -B main && git add -A && git commit -m "${safeMessage}" && git remote add origin "${remoteWithAuth}" && git push -u origin main --force`;
+    } else {
+      cmds = `git remote set-url origin "${remoteWithAuth}" && git add -A && git commit -m "${safeMessage}" || true && git push origin HEAD`;
+    }
+
+    const { stdout, stderr } = await execAsync(cmds, { cwd: targetDir });
+    return stdout || stderr || 'Push ejecutado exitosamente';
   },
 };
