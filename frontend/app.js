@@ -1,5 +1,4 @@
 import { renderFiles } from './views/files.js';
-import { renderEditor } from './views/editor.js';
 import { renderTerminal } from './views/terminal.js';
 import { renderNotebooks } from './views/notebooks.js';
 import { renderFTP } from './views/ftp.js';
@@ -10,7 +9,6 @@ let currentUser = null;
 
 const views = {
   files: renderFiles,
-  editor: renderEditor,
   terminal: renderTerminal,
   notebooks: renderNotebooks,
   ftp: renderFTP,
@@ -24,35 +22,44 @@ window.showToast = function (msg) {
   setTimeout(() => toast.classList.remove('active'), 2500);
 };
 
-window.toggleTheme = function () {
-  document.body.classList.toggle('dark-mode');
-  const icon = document.getElementById('theme-icon');
-  if (document.body.classList.contains('dark-mode')) {
-    icon.classList.replace('fa-moon', 'fa-sun');
-  } else {
-    icon.classList.replace('fa-sun', 'fa-moon');
-  }
-};
-
 window.toggleSidebar = function () {
   document.getElementById('sidebar').classList.toggle('active');
   document.getElementById('overlay').classList.toggle('active');
 };
 
-window.navigate = function (viewName) {
+window.closeModal = function (id) {
+  document.getElementById(id).classList.remove('active');
+};
+
+// Navegación con soporte para historial del navegador móvil
+window.navigate = function (viewName, pushState = true) {
   if (!currentUser) return;
-  const renderer = views[viewName] || views.files;
+  const targetView = views[viewName] ? viewName : 'files';
+  const renderer = views[targetView];
+
   document.querySelectorAll('.sidebar-item').forEach((item) => {
-    item.classList.toggle('active', item.id === `nav-${viewName}`);
+    item.classList.toggle('active', item.id === `nav-${targetView}`);
   });
 
   if (document.getElementById('sidebar').classList.contains('active')) {
     window.toggleSidebar();
   }
 
+  // Agrega al historial para que el botón atrás del móvil funcione
+  if (pushState && window.location.pathname.replace(/^\/+/, '') !== targetView) {
+    window.history.pushState({ view: targetView }, '', `/${targetView}`);
+  }
+
   container.innerHTML = '';
   renderer(container);
 };
+
+// Escucha el botón "atrás" del teléfono
+window.addEventListener('popstate', (event) => {
+  if (!currentUser) return;
+  const targetView = event.state?.view || window.location.pathname.replace(/^\/+/, '') || 'files';
+  window.navigate(targetView, false);
+});
 
 window.logout = async function () {
   await fetch('/api/auth/logout', { method: 'POST' });
@@ -83,7 +90,7 @@ document.getElementById('authForm').addEventListener('submit', async (e) => {
     currentUser = data.user;
     localStorage.setItem('filelynx_user', JSON.stringify(currentUser));
     init();
-  } catch (err) {
+  } catch {
     errBox.innerText = 'Error al comunicarse con el servidor';
     errBox.style.display = 'block';
   }
@@ -91,7 +98,6 @@ document.getElementById('authForm').addEventListener('submit', async (e) => {
 
 async function init() {
   const vpsHost = window.location.host;
-  document.getElementById('dispVpsHost').innerText = vpsHost;
   document.getElementById('loginHostSubtitle').innerText = `Servidor: ${vpsHost}`;
 
   const saved = localStorage.getItem('filelynx_user');
@@ -115,7 +121,8 @@ async function init() {
   document.getElementById('mainTopbar').style.display = 'flex';
   document.getElementById('uEmail').innerText = currentUser.username;
 
-  window.navigate('files');
+   const initialRoute = window.location.pathname.replace(/^\/+/, '') || 'files';
+  window.navigate(initialRoute, false);
 }
 
 window.onload = init;
