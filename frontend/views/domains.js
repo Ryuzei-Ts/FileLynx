@@ -21,14 +21,14 @@ export async function renderDomains(container) {
             <input type="number" id="newDomainPort" class="param-input" value="3000" placeholder="3000" />
           </div>
           <div>
-            <label class="param-label">Correo para Certbot SSL (Let's Encrypt)</label>
+            <label class="param-label">Correo para Certbot SSL</label>
             <input type="email" id="newDomainEmail" class="param-input" placeholder="admin@midominio.com" />
           </div>
         </div>
 
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
           <input type="checkbox" id="autoSslCheck" checked style="width:18px; height:18px; cursor:pointer;" />
-          <label for="autoSslCheck" style="font-size:0.84rem; font-weight:700; cursor:pointer;">Generar Certificado SSL (HTTPS) automáticamente con Certbot</label>
+          <label for="autoSslCheck" style="font-size:0.84rem; font-weight:700; cursor:pointer;">Generar Certificado SSL (HTTPS) con Certbot</label>
         </div>
 
         <button class="btn-full" id="btnCreateDomainProxy" style="width:auto; padding:10px 22px;">
@@ -62,7 +62,7 @@ async function loadDomainList() {
       container.innerHTML = `
         <div style="padding:16px; background:rgba(245,158,11,0.1); border-left:4px solid var(--price-color); border-radius:8px;">
           <b>Nginx no está instalado en este VPS.</b>
-          <p style="font-size:0.8rem; margin-top:4px;">Instálalo ejecutando en tu terminal: <code>apt-get install -y nginx certbot python3-certbot-nginx</code></p>
+          <p style="font-size:0.8rem; margin-top:4px;">Instálalo ejecutando: <code>apt-get install -y nginx certbot python3-certbot-nginx</code></p>
         </div>
       `;
       return;
@@ -92,7 +92,7 @@ async function loadDomainList() {
         </div>
       </div>
     `).join('');
-  } catch (err: any) {
+  } catch (err) {
     container.innerHTML = `<p style="color:#ef4444; padding:10px;">Error: ${err.message}</p>`;
   }
 }
@@ -105,7 +105,7 @@ async function handleCreateDomain() {
   const btn = document.getElementById('btnCreateDomainProxy');
 
   if (!domain) {
-    alert('Ingresa el nombre del dominio');
+    window.showToast?.('Ingresa el nombre del dominio');
     return;
   }
 
@@ -123,17 +123,17 @@ async function handleCreateDomain() {
     const data = await res.json();
     if (data.success) {
       if (data.warning) {
-        alert(data.warning);
+        window.showToast?.(data.warning);
       } else {
         window.showToast?.('Dominio vinculado exitosamente ✰');
       }
       document.getElementById('newDomainName').value = '';
       loadDomainList();
     } else {
-      alert(`Error al vincular: ${data.error}`);
+      window.showToast?.(data.error || 'Error al vincular');
     }
   } catch {
-    alert('Fallo de conexión al configurar Nginx');
+    window.showToast?.('Fallo de conexión al configurar Nginx');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-plus"></i> Vincular Dominio & Configurar Nginx';
@@ -156,10 +156,10 @@ window.issueSslForDomain = async function (domain) {
       window.showToast?.('Certificado SSL instalado correctamente ꕤ');
       loadDomainList();
     } else {
-      alert(`Fallo en Certbot: ${d.error}`);
+      window.showToast?.(d.error || 'Fallo en Certbot');
     }
   } catch {
-    alert('Error al generar certificado SSL');
+    window.showToast?.('Error al generar certificado SSL');
   }
 };
 
@@ -171,6 +171,6 @@ window.deleteDomainConfig = async function (domain) {
     window.showToast?.('Dominio eliminado de Nginx');
     loadDomainList();
   } catch {
-    alert('Error al eliminar dominio');
+    window.showToast?.('Error al eliminar dominio');
   }
 };
