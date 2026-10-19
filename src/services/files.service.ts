@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -95,15 +95,25 @@ export const filesService = {
     const safeSrc = resolveSafePath(sourceRelativePath);
     const parentDir = path.dirname(safeSrc);
     const baseName = path.basename(safeSrc);
-    const archiveName = `${baseName}.${format === 'zip' ? 'zip' : 'tar.gz'}`;
-    const archivePath = path.join(parentDir, archiveName);
 
     if (format === 'zip') {
-      await execAsync(`cd "${parentDir}" && zip -r -q "${archiveName}" "${baseName}"`);
+      try {
+        const archiveName = `${baseName}.zip`;
+        await execAsync(`cd "${parentDir}" && zip -r -q "${archiveName}" "${baseName}"`);
+        return archiveName;
+      } catch (err: any) {
+        if (err.message && err.message.includes('zip: not found')) {
+          const tarName = `${baseName}.tar.gz`;
+          await execAsync(`cd "${parentDir}" && tar -czf "${tarName}" "${baseName}"`);
+          return tarName;
+        }
+        throw err;
+      }
     } else {
+      const archiveName = `${baseName}.tar.gz`;
       await execAsync(`cd "${parentDir}" && tar -czf "${archiveName}" "${baseName}"`);
+      return archiveName;
     }
-    return archiveName;
   },
 
   async extract(archiveRelativePath: string, destinationDir?: string): Promise<void> {
@@ -119,6 +129,31 @@ export const filesService = {
       await execAsync(`tar -xf "${safeArchive}" -C "${targetDest}"`);
     } else {
       throw new Error('Formato no soportado. Usa .zip, .tar.gz o .tar');
+    }
+  },
+
+  async getGitConfigInfo(folderPath: string): Promise<{ remoteUrl: string; branch: string; hasGit: boolean }> {
+    const safeDir = resolveSafePath(folderPath);
+    const configPath = path.join(safeDir, '.git', 'config');
+
+    try {
+      const configData = await fs.readFile(configPath, 'utf-8');
+      const urlMatch = configData.match(/url\s*=\s*(.+)/);
+      let branch = 'main';
+
+      try {
+        const headData = await fs.readFile(path.join(safeDir, '.git', 'HEAD'), 'utf-8');
+        const headMatch = headData.match(/ref:\s*refs\/heads\/(.+)/);
+        if (headMatch) branch = headMatch[1].trim();
+      } catch {}
+
+      return {
+        hasGit: true,
+        remoteUrl: urlMatch ? urlMatch[1].trim() : '',
+        branch,
+      };
+    } catch {
+      return { hasGit: false, remoteUrl: '', branch: 'main' };
     }
   },
 
@@ -150,18 +185,26 @@ export const filesService = {
     }
   },
 
-  async gitPush(targetFolder: string, repoUrl: string, token: string, commitMsg: string = 'Update from FileLynx', branch: string = 'main'): Promise<string> {
+  async gitPush(targetFolder: string, repoUrl?: string, token?: string, commitMsg: string = 'Update from FileLynx', branch?: string): Promise<string> {
     const safeDir = resolveSafePath(targetFolder);
-    let cleanRepo = repoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    cleanRepo = cleanRepo.replace(/^github\.com\//, '').replace(/\.git$/, '');
+    const gitInfo = await this.getGitConfigInfo(targetFolder);
 
-    const [owner, repo] = cleanRepo.split('/');
-    if (!owner || !repo) {
-      throw new Error('URL de repositorio inválida');
+    const finalRepoUrl = repoUrl && repoUrl.trim() ? repoUrl.trim() : gitInfo.remoteUrl;
+    const finalBranch = branch && branch.trim() ? branch.trim() : gitInfo.branch || 'main';
+
+    if (!finalRepoUrl) {
+      throw new Error('No se encontró URL remota configurada en .git/config');
     }
 
-    const authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
-    const cmd = `cd "${safeDir}" && git config user.name "FileLynx" && git config user.email "filelynx@local" && git remote remove origin 2>/dev/null || true && git remote add origin "${authRemote}" && git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true && git branch -M "${branch}" && git push -u origin "${branch}" --force`;
+    let authRemote = finalRepoUrl;
+    if (token && token.trim()) {
+      let clean = finalRepoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      clean = clean.replace(/^[^@]+@github\.com\//, 'github.com/').replace(/^github\.com\//, '');
+      authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${clean}`;
+      if (!authRemote.endsWith('.git')) authRemote += '.git';
+    }
+
+    const cmd = `cd "${safeDir}" && git config user.name "FileLynx" && git config user.email "filelynx@local" && (git remote set-url origin "${authRemote}" 2>/dev/null || git remote add origin "${authRemote}") && git add -A && (git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true) && git push -u origin "${finalBranch}"`;
 
     const { stdout, stderr } = await execAsync(cmd);
     return stdout || stderr;
