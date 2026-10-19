@@ -1,10 +1,8 @@
-let activeSelectedFile = null;
 let currentDirectory = '';
+let activeTargetFile = null;
 
 export async function renderFiles(container, initialPath = '') {
   currentDirectory = initialPath;
-  activeSelectedFile = null;
-  updateContextButtonState();
 
   container.innerHTML = `
     <div class="progress-card" id="taskProgressBar">
@@ -52,7 +50,7 @@ export async function renderFiles(container, initialPath = '') {
           <input type="text" id="dirInput" class="param-input" value="${currentDirectory}" placeholder="/ruta" readonly/>
           <button class="stat-btn" id="btnBackDir"><i class="fas fa-arrow-left"></i> Volver</button>
         </div>
-        
+
         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
           <button class="stat-btn" id="btnNewFile"><i class="fas fa-file-plus"></i> + Archivo</button>
           <button class="stat-btn" id="btnNewDir"><i class="fas fa-folder-plus"></i> + Carpeta</button>
@@ -125,7 +123,7 @@ export async function renderFiles(container, initialPath = '') {
   loadDir(currentDirectory);
 }
 
-window.pickImport = function(type) {
+window.pickImport = function (type) {
   document.getElementById('modalImportCenter').classList.remove('active');
   if (type === 'files') {
     document.getElementById('fileUploadInput').click();
@@ -140,8 +138,13 @@ async function loadDir(dirPath) {
   currentDirectory = dirPath;
   const dirInput = document.getElementById('dirInput');
   if (dirInput) dirInput.value = currentDirectory;
-  activeSelectedFile = null;
-  updateContextButtonState();
+
+  if (window.location.pathname.startsWith('/files')) {
+    const urlPath = currentDirectory ? `/files/${currentDirectory}` : '/files';
+    if (window.location.pathname !== urlPath) {
+      window.history.pushState({ view: 'files', dir: currentDirectory }, '', urlPath);
+    }
+  }
 
   const listContainer = document.getElementById('fileEntriesList');
   if (!listContainer) return;
@@ -161,27 +164,30 @@ async function loadDir(dirPath) {
       const row = document.createElement('div');
       row.className = 'file-row';
       row.innerHTML = `
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px; flex:1; overflow:hidden;">
           <i class="${file.isDirectory ? 'fas fa-folder text-primary' : 'fas fa-file'}" style="color:${file.isDirectory ? '#2563eb' : '#64748b'}"></i>
-          <span style="font-weight:700;">${file.name}</span>
+          <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${file.name}</span>
         </div>
-        <span style="font-size:0.75rem; color:var(--text-gray);">${file.isDirectory ? 'Directorio' : `${file.size} B`}</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:0.75rem; color:var(--text-gray);">${file.isDirectory ? 'Directorio' : `${file.size} B`}</span>
+          <button class="stat-btn btn-row-menu" style="padding:4px 8px;" title="Opciones">
+            <i class="fas fa-ellipsis-h"></i>
+          </button>
+        </div>
       `;
 
-      row.onclick = (e) => {
-        e.stopPropagation();
-        document.querySelectorAll('.file-row').forEach((r) => r.classList.remove('selected'));
-        row.classList.add('selected');
-        activeSelectedFile = file;
-        updateContextButtonState();
-      };
-
-      row.ondblclick = () => {
+      row.onclick = () => {
         if (file.isDirectory) {
           loadDir(file.path);
         } else {
           openEditor(file.path);
         }
+      };
+
+      const menuBtn = row.querySelector('.btn-row-menu');
+      menuBtn.onclick = (e) => {
+        e.stopPropagation();
+        openActionMenuForFile(file);
       };
 
       listContainer.appendChild(row);
@@ -191,40 +197,63 @@ async function loadDir(dirPath) {
   }
 }
 
-function updateContextButtonState() {
-  const btn = document.getElementById('fileContextTrigger');
-  const menu = document.getElementById('fileContextMenu');
-  if (btn) {
-    if (activeSelectedFile) {
-      btn.classList.add('active');
-      btn.innerHTML = `<i class="fas fa-ellipsis-v"></i> ${activeSelectedFile.name}`;
-    } else {
-      btn.classList.remove('active');
-      if (menu) menu.classList.remove('open');
-    }
-  }
+function openActionMenuForFile(file) {
+  activeTargetFile = file;
+  const actions = [
+    { label: 'Renombrar', icon: 'fa-pencil-alt', action: 'rename' },
+    { label: 'Mover', icon: 'fa-arrows-alt', action: 'move' },
+    { label: 'Git Push', icon: 'fa-cloud-upload-alt', action: 'git-push' },
+    { label: 'Descargar', icon: 'fa-download', action: 'download' },
+    { label: 'Editar', icon: 'fa-edit', action: 'edit', hide: file.isDirectory },
+    { label: 'Eliminar', icon: 'fa-trash', action: 'delete', danger: true },
+  ];
+
+  const existingMenu = document.getElementById('floatingRowActionMenu');
+  if (existingMenu) existingMenu.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'floatingRowActionMenu';
+  menu.className = 'card-context-menu open';
+  menu.style.position = 'fixed';
+  menu.style.top = '50%';
+  menu.style.left = '50%';
+  menu.style.transform = 'translate(-50%, -50%)';
+  menu.style.zIndex = '3000';
+  menu.style.width = '240px';
+
+  let listHtml = '<ul class="list">';
+  actions.forEach((a) => {
+    if (a.hide) return;
+    listHtml += `
+      <li class="element ${a.danger ? 'delete' : ''}" onclick="executeRowAction('${a.action}')">
+        <i class="fas ${a.icon}" style="width:18px;"></i>
+        <p class="label">${a.label}</p>
+      </li>
+    `;
+  });
+  listHtml += '</ul>';
+  listHtml += '<div style="padding:6px 8px;"><button class="stat-btn" style="width:100%; justify-content:center;" onclick="document.getElementById(\'floatingRowActionMenu\').remove()">Cerrar</button></div>';
+
+  menu.innerHTML = listHtml;
+  document.body.appendChild(menu);
 }
 
-window.toggleFileContextMenu = function () {
-  const menu = document.getElementById('fileContextMenu');
-  if (menu) menu.classList.toggle('open');
-};
+window.executeRowAction = async function (action) {
+  const menu = document.getElementById('floatingRowActionMenu');
+  if (menu) menu.remove();
+  if (!activeTargetFile) return;
 
-window.triggerFileAction = async function (action) {
-  const menu = document.getElementById('fileContextMenu');
-  if (menu) menu.classList.remove('open');
-  if (!activeSelectedFile) return;
-
-  const p = activeSelectedFile.path;
+  const file = activeTargetFile;
+  const p = file.path;
 
   if (action === 'rename') {
-    document.getElementById('renameOldNameInput').value = activeSelectedFile.name;
-    document.getElementById('renameNewNameInput').value = activeSelectedFile.name;
+    document.getElementById('renameOldNameInput').value = file.name;
+    document.getElementById('renameNewNameInput').value = file.name;
     document.getElementById('modalRename').classList.add('active');
 
     document.getElementById('btnConfirmRename').onclick = async () => {
       const newName = document.getElementById('renameNewNameInput').value.trim();
-      if (!newName || newName === activeSelectedFile.name) {
+      if (!newName || newName === file.name) {
         document.getElementById('modalRename').classList.remove('active');
         return;
       }
@@ -239,16 +268,70 @@ window.triggerFileAction = async function (action) {
       window.showToast?.('Renombrado exitosamente ✰');
       loadDir(currentDirectory);
     };
+  } else if (action === 'move') {
+    document.getElementById('moveSourcePathInput').value = p;
+    document.getElementById('moveDestPathInput').value = '';
+    document.getElementById('modalMove').classList.add('active');
+
+    document.getElementById('btnConfirmMove').onclick = async () => {
+      const dest = document.getElementById('moveDestPathInput').value.trim();
+      document.getElementById('modalMove').classList.remove('active');
+      const res = await fetch('/api/files/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: p, destinationDir: dest }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.showToast?.('Elemento movido exitosamente ꕤ');
+        loadDir(currentDirectory);
+      } else {
+        alert(data.error || 'Error al mover elemento');
+      }
+    };
+  } else if (action === 'git-push') {
+    const savedToken = localStorage.getItem('filelynx_gh_token') || '';
+    document.getElementById('pushToken').value = savedToken;
+    document.getElementById('modalGitPush').classList.add('active');
+
+    document.getElementById('btnConfirmGitPush').onclick = async () => {
+      const repoUrl = document.getElementById('pushRepoUrl').value.trim();
+      const token = document.getElementById('pushToken').value.trim();
+      const branch = document.getElementById('pushBranch').value.trim() || 'main';
+      const commitMsg = document.getElementById('pushCommitMsg').value.trim() || 'Update from FileLynx';
+
+      if (!repoUrl || !token) {
+        alert('Ingresa el repositorio y el Token de GitHub');
+        return;
+      }
+
+      localStorage.setItem('filelynx_gh_token', token);
+      document.getElementById('modalGitPush').classList.remove('active');
+      window.showToast?.('Ejecutando git push...');
+
+      const folder = file.isDirectory ? file.path : currentDirectory;
+      try {
+        const res = await fetch('/api/files/git-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderPath: folder, repoUrl, token, branch, commitMsg }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.showToast?.('Git Push realizado exitosamente ✰');
+        } else {
+          alert('Error en Git Push: ' + data.error);
+        }
+      } catch {
+        alert('Fallo de conexión al hacer push');
+      }
+    };
   } else if (action === 'edit') {
-    if (activeSelectedFile.isDirectory) {
-      window.showToast?.('Solo se pueden editar archivos');
-      return;
-    }
     openEditor(p);
   } else if (action === 'download') {
     window.location.href = `/api/files/download?path=${encodeURIComponent(p)}`;
   } else if (action === 'delete') {
-    document.getElementById('deleteItemPromptText').innerText = `¿Estás seguro de que deseas eliminar permanentemente "${activeSelectedFile.name}"?`;
+    document.getElementById('deleteItemPromptText').innerText = `¿Estás seguro de que deseas eliminar permanentemente "${file.name}"?`;
     document.getElementById('modalDeleteConfirm').classList.add('active');
 
     document.getElementById('btnConfirmDelete').onclick = async () => {
