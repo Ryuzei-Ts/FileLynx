@@ -102,12 +102,9 @@ export const filesService = {
         await execAsync(`cd "${parentDir}" && zip -r -q "${archiveName}" "${baseName}"`);
         return archiveName;
       } catch (err: any) {
-        if (err.message && err.message.includes('zip: not found')) {
-          const tarName = `${baseName}.tar.gz`;
-          await execAsync(`cd "${parentDir}" && tar -czf "${tarName}" "${baseName}"`);
-          return tarName;
-        }
-        throw err;
+        const tarName = `${baseName}.tar.gz`;
+        await execAsync(`cd "${parentDir}" && tar -czf "${tarName}" "${baseName}"`);
+        return tarName;
       }
     } else {
       const archiveName = `${baseName}.tar.gz`;
@@ -122,7 +119,11 @@ export const filesService = {
     const ext = safeArchive.toLowerCase();
 
     if (ext.endsWith('.zip')) {
-      await execAsync(`unzip -o -q "${safeArchive}" -d "${targetDest}"`);
+      try {
+        await execAsync(`unzip -o -q "${safeArchive}" -d "${targetDest}"`);
+      } catch (err: any) {
+        await execAsync(`python3 -c "import zipfile; zipfile.ZipFile('${safeArchive}').extractall('${targetDest}')"`);
+      }
     } else if (ext.endsWith('.tar.gz') || ext.endsWith('.tgz')) {
       await execAsync(`tar -xzf "${safeArchive}" -C "${targetDest}"`);
     } else if (ext.endsWith('.tar')) {
@@ -162,7 +163,7 @@ export const filesService = {
     await fs.mkdir(targetFolder, { recursive: true });
 
     let cleanRepo = repoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    cleanRepo = cleanRepo.replace(/^github\.com\//, '').replace(/\.git$/, '');
+    cleanRepo = cleanRepo.replace(/^[^@]+@github\.com\//, '').replace(/^github\.com\//, '').replace(/\.git$/, '');
 
     const [owner, repo] = cleanRepo.split('/');
     if (!owner || !repo) {
@@ -180,6 +181,9 @@ export const filesService = {
     try {
       await execAsync(cmd);
     } catch (err: any) {
+      if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed'))) {
+        throw new Error('PRIVATE_REPO_AUTH_REQUIRED');
+      }
       const sanitizedMsg = (err.message || '').replace(new RegExp(token || '___', 'g'), '***');
       throw new Error(sanitizedMsg);
     }
@@ -190,23 +194,30 @@ export const filesService = {
     const gitInfo = await this.getGitConfigInfo(targetFolder);
 
     const finalRepoUrl = repoUrl && repoUrl.trim() ? repoUrl.trim() : gitInfo.remoteUrl;
-    const finalBranch = branch && branch.trim() ? branch.trim() : gitInfo.branch || 'main';
+    const finalBranch = branch && branch.trim() ? branch.trim() : (gitInfo.branch || 'main');
 
     if (!finalRepoUrl) {
-      throw new Error('No se encontró URL remota configurada en .git/config');
+      throw new Error('No se encontró URL remota en .git/config');
     }
 
     let authRemote = finalRepoUrl;
     if (token && token.trim()) {
       let clean = finalRepoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      clean = clean.replace(/^[^@]+@github\.com\//, 'github.com/').replace(/^github\.com\//, '');
-      authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${clean}`;
-      if (!authRemote.endsWith('.git')) authRemote += '.git';
+      clean = clean.replace(/^[^@]+@github\.com\//, 'github.com/').replace(/^github\.com\//, '').replace(/\.git$/, '');
+      authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${clean}.git`;
     }
 
     const cmd = `cd "${safeDir}" && git config user.name "FileLynx" && git config user.email "filelynx@local" && (git remote set-url origin "${authRemote}" 2>/dev/null || git remote add origin "${authRemote}") && git add -A && (git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true) && git push -u origin "${finalBranch}"`;
 
-    const { stdout, stderr } = await execAsync(cmd);
-    return stdout || stderr;
+    try {
+      const { stdout, stderr } = await execAsync(cmd);
+      return stdout || stderr;
+    } catch (err: any) {
+      if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed') || err.message.includes('Permission to'))) {
+        throw new Error('AUTH_REQUIRED');
+      }
+      const cleanMsg = (err.message || '').replace(new RegExp(token || '___', 'g'), '***');
+      throw new Error(cleanMsg);
+    }
   },
 };
