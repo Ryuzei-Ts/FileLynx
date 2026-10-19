@@ -17,6 +17,17 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+router.get('/git-info', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const folderPath = (req.query.path as string) || '';
+    const info = await filesService.getGitConfigInfo(folderPath);
+    res.json(info);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Error al leer git config';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.get('/read', async (req: Request, res: Response): Promise<void> => {
   try {
     const filePath = req.query.path as string;
@@ -164,12 +175,11 @@ router.get('/download', async (req: Request, res: Response): Promise<void> => {
 
     const stat = fs.statSync(safePath);
     if (stat.isDirectory()) {
-      const zipName = `${path.basename(safePath)}.zip`;
-      await filesService.compress(filePath, 'zip');
-      const safeZipPath = path.join(path.dirname(safePath), zipName);
-      res.download(safeZipPath, zipName, (err) => {
+      const archiveName = await filesService.compress(filePath, 'zip');
+      const safeArchivePath = path.join(path.dirname(safePath), archiveName);
+      res.download(safeArchivePath, archiveName, (err) => {
         if (!err) {
-          fs.unlink(safeZipPath, () => {});
+          fs.unlink(safeArchivePath, () => {});
         }
       });
       return;
@@ -200,10 +210,6 @@ router.post('/github-import', async (req: Request, res: Response): Promise<void>
 router.post('/git-push', async (req: Request, res: Response): Promise<void> => {
   try {
     const { folderPath, repoUrl, token, commitMsg, branch } = req.body;
-    if (!repoUrl || !token) {
-      res.status(400).json({ error: 'Se requiere la URL del repositorio y el Token de GitHub' });
-      return;
-    }
     const output = await filesService.gitPush(folderPath || '', repoUrl, token, commitMsg, branch);
     res.json({ success: true, output });
   } catch (err: unknown) {
