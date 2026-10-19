@@ -2,32 +2,112 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FileLynx Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title id="sitePageTitle">FileLynx Web Manager</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+
+  <!-- Monaco Editor Loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 </head>
 <body>
-  <aside id="sidebar">
-    <div class="brand">FILELYNX ✰</div>
-    <nav>
-      <ul>
-        <li><button class="nav-btn active" data-view="files">Archivos</button></li>
-        <li><button class="nav-btn" data-view="terminal">Terminal</button></li>
-        <li><button class="nav-btn" data-view="notebooks">Notebooks</button></li>
-        <li><button class="nav-btn" data-view="ftp">Cliente FTP</button></li>
-        <li><button class="nav-btn" data-view="s3">S3 Cloud</button></li>
-      </ul>
-    </nav>
+
+  <div class="topbar" id="mainTopbar" style="display:none;">
+    <div class="topbar-left">
+      <div class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></div>
+      <span class="api-name-top" onclick="navigate('files')">FileLynx Manager ✰</span>
+    </div>
+    <div class="topbar-right">
+      <div class="dark-mode-toggle" onclick="toggleTheme()">
+        <i class="fas fa-moon" id="theme-icon"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div>
+      <div class="user-badge-sidebar" id="sidebarUserBox">
+        <span>Autenticado en VPS</span>
+        <b id="uEmail">admin</b>
+        <div class="user-vps-display" id="dispVpsHost">Cargando servidor...</div>
+      </div>
+
+      <div class="sidebar-section">
+        <p class="sidebar-title">Navegación</p>
+        <a class="sidebar-item active" id="nav-files" onclick="navigate('files')">
+          <i class="fas fa-folder"></i> Explorador
+        </a>
+        <a class="sidebar-item" id="nav-editor" onclick="navigate('editor')">
+          <i class="fas fa-code"></i> Monaco Editor
+        </a>
+        <a class="sidebar-item" id="nav-terminal" onclick="navigate('terminal')">
+          <i class="fas fa-terminal"></i> Terminal PTY
+        </a>
+        <a class="sidebar-item" id="nav-notebooks" onclick="navigate('notebooks')">
+          <i class="fas fa-book"></i> Notebooks
+        </a>
+        <a class="sidebar-item" id="nav-ftp" onclick="navigate('ftp')">
+          <i class="fas fa-network-wired"></i> Cliente FTP
+        </a>
+        <a class="sidebar-item" id="nav-s3" onclick="navigate('s3')">
+          <i class="fas fa-cloud"></i> S3 Bucket
+        </a>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="sidebar-item" onclick="logout()" style="color: #ef4444;">
+        <i class="fas fa-sign-out-alt" style="color: #ef4444 !important;"></i> Cerrar Sesión
+      </div>
+    </div>
   </aside>
 
-  <section id="main-content">
-    <header>
-      <div id="status-bar">Conectado</div>
-      <div id="user-info">admin</div>
-    </header>
-    <main id="view-container"></main>
-  </section>
+  <!-- Login view (sin register) -->
+  <div id="view-auth" class="auth-container-wrapper">
+    <div class="auth-card-large">
+      <div style="text-align:center; margin-bottom:22px;">
+        <div style="width:52px; height:52px; border-radius:16px; background:var(--primary); color:#ffffff; display:inline-flex; align-items:center; justify-content:center; font-size:1.4rem; font-weight:900; margin-bottom:12px; box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.35);">
+          <i class="fas fa-server"></i>
+        </div>
+        <h2 style="font-weight: 800; font-size: 1.5rem; color:var(--text-dark); letter-spacing: -0.5px;">Acceso a FileLynx</h2>
+        <p style="font-size: 0.82rem; color: var(--text-gray); font-weight: 700; margin-top:4px;" id="loginHostSubtitle">VPS Terminal & Editor</p>
+      </div>
+
+      <form id="authForm">
+        <div class="param-group">
+          <label class="param-label">Usuario</label>
+          <input type="text" id="authUsername" class="param-input" required placeholder="admin">
+        </div>
+        <div class="param-group">
+          <label class="param-label">Contraseña</label>
+          <input type="password" id="authPassword" class="param-input" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-full" id="authSubmitBtn">Iniciar Sesión</button>
+      </form>
+
+      <div style="margin-top: 18px; padding: 12px; background: var(--bg-params); border-radius: var(--radius-element); border: 1px solid var(--border);">
+        <p style="font-size: 0.72rem; color: var(--text-gray); line-height: 1.45; text-align: center;">
+          ¿Olvidaste tu contraseña? Ejecuta en tu VPS:<br>
+          <code style="color: var(--primary); font-weight: 800;">npm run reset-password</code>
+        </p>
+      </div>
+
+      <p id="authErr" style="color: #ef4444; font-size: 0.8rem; font-weight: 700; text-align: center; margin-top: 12px; display: none;"></p>
+    </div>
+  </div>
+
+  <!-- Panel principal -->
+  <main class="main-content" id="panelMainContent" style="display:none;">
+    <div id="view-container"></div>
+  </main>
+
+  <div id="toast">Acción completada con éxito</div>
+  <footer>FileLynx Cloud IDE &copy; 2026 Ryuzei-Ts</footer>
 
   <script type="module" src="app.js"></script>
 </body>
