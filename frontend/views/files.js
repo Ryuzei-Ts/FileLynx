@@ -19,10 +19,14 @@ function updateProgress(title, msg, pct) {
   const card = document.getElementById('cybercomProgress');
   if (!card) return;
   card.classList.add('active');
-  document.getElementById('cybercomTitle').innerText = title;
-  document.getElementById('cybercomMsg').innerText = msg;
-  document.getElementById('cybercomBar').style.width = `${pct}%`;
-  document.getElementById('cybercomPct').innerText = `${pct}% Complete`;
+  const tEl = document.getElementById('cybercomTitle');
+  const mEl = document.getElementById('cybercomMsg');
+  const bEl = document.getElementById('cybercomBar');
+  const pEl = document.getElementById('cybercomPct');
+  if (tEl) tEl.innerText = title;
+  if (mEl) mEl.innerText = msg;
+  if (bEl) bEl.style.width = `${pct}%`;
+  if (pEl) pEl.innerText = `${pct}% Complete`;
   if (pct >= 100) {
     setTimeout(() => card.classList.remove('active'), 1800);
   }
@@ -239,7 +243,7 @@ function openActionMenuForFile(file) {
     { label: 'Descomprimir', icon: 'fa-box-open', action: 'extract', hide: !file.isArchive },
     { label: 'Renombrar', icon: 'fa-pencil-alt', action: 'rename' },
     { label: 'Mover', icon: 'fa-arrows-alt', action: 'move' },
-    { label: 'Git Push', icon: 'fa-cloud-upload-alt', action: 'git-push', hide: !file.hasGit },
+    { label: 'Git Pull', icon: 'fa-sync-alt', action: 'git-pull', hide: !file.hasGit },
     { label: 'Editar', icon: 'fa-edit', action: 'edit', hide: file.isDirectory },
     { label: 'Eliminar', icon: 'fa-trash', action: 'delete', danger: true },
   ];
@@ -367,74 +371,79 @@ window.executeRowAction = async function (action) {
         showAppDialog('Error al Mover', data.error || 'No se pudo mover el elemento', true);
       }
     };
-  } else if (action === 'git-push') {
+  } else if (action === 'git-pull') {
     const folder = file.isDirectory ? file.path : currentDirectory;
-    const savedToken = localStorage.getItem('filelynx_gh_token') || '';
+    let savedToken = localStorage.getItem('filelynx_gh_token') || '';
 
-    updateProgress('Git Push', `Comprobando .git/config en ${file.name}...`, 25);
+    updateProgress('Git Pull', `Actualizando ${file.name}...`, 25);
 
     try {
-      const pushRes = await fetch('/api/files/git-push', {
+      const infoRes = await fetch(`/api/files/git-info?path=${encodeURIComponent(folder)}`);
+      const gitInfo = await infoRes.json();
+      const remoteUrl = gitInfo.remoteUrl || '';
+      const branch = gitInfo.branch || 'main';
+
+      const pullRes = await fetch('/api/files/git-pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderPath: folder, token: savedToken || undefined }),
+        body: JSON.stringify({ folderPath: folder, repoUrl: remoteUrl, token: savedToken || undefined, branch }),
       });
-      const pushData = await pushRes.json();
+      const pullData = await pullRes.json();
 
-      if (pushData.success) {
-        updateProgress('Git Push', 'Cambios enviados exitosamente a GitHub', 100);
-        window.showToast?.('Git Push exitoso ✰');
+      if (pullData.success) {
+        updateProgress('Git Pull', 'Carpeta actualizada exitosamente', 100);
+        window.showToast?.('Git Pull exitoso ✰');
+        loadDir(currentDirectory);
         return;
       }
 
-      // Si falló el push automático, consulta .git/config y abre el modal precompletado
-      const infoRes = await fetch(`/api/files/git-info?path=${encodeURIComponent(folder)}`);
-      const gitInfo = await infoRes.json();
-
       document.getElementById('cybercomProgress')?.classList.remove('active');
 
-      document.getElementById('pushRepoUrl').value = gitInfo.remoteUrl || '';
-      document.getElementById('pushBranch').value = gitInfo.branch || 'main';
-      document.getElementById('pushToken').value = savedToken;
-      document.getElementById('modalGitPush').classList.add('active');
+      document.getElementById('pullRepoUrl').value = remoteUrl;
+      document.getElementById('pullBranch').value = branch;
+      document.getElementById('pullToken').value = savedToken;
+      document.getElementById('modalGitPull').classList.add('active');
 
-      document.getElementById('btnConfirmGitPush').onclick = async () => {
-        const repoUrl = document.getElementById('pushRepoUrl').value.trim();
-        const token = document.getElementById('pushToken').value.trim();
-        const branch = document.getElementById('pushBranch').value.trim() || 'main';
-        const commitMsg = document.getElementById('pushCommitMsg').value.trim() || 'Update from FileLynx';
+      document.getElementById('btnConfirmGitPull').onclick = async () => {
+        const newRepoUrl = document.getElementById('pullRepoUrl').value.trim();
+        const newToken = document.getElementById('pullToken').value.trim();
+        const newBranch = document.getElementById('pullBranch').value.trim() || 'main';
 
-        // Cierra el modal de inmediato
-        document.getElementById('modalGitPush').classList.remove('active');
+        document.getElementById('modalGitPull').classList.remove('active');
 
-        if (token) {
-          localStorage.setItem('filelynx_gh_token', token);
+        if (newToken) {
+          localStorage.setItem('filelynx_gh_token', newToken);
+          savedToken = newToken;
         }
 
-        updateProgress('Git Push', `Enviando a ${repoUrl}...`, 50);
+        updateProgress('Git Pull', `Descargando desde ${newRepoUrl || 'origin'}...`, 50);
 
         try {
-          const res = await fetch('/api/files/git-push', {
+          const res = await fetch('/api/files/git-pull', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folderPath: folder, repoUrl, token, branch, commitMsg }),
+            body: JSON.stringify({ folderPath: folder, repoUrl: newRepoUrl, token: newToken, branch: newBranch }),
           });
           const d = await res.json();
           if (d.success) {
-            updateProgress('Git Push', 'Cambios enviados exitosamente', 100);
-            window.showToast?.('Git Push realizado exitosamente ✰');
+            updateProgress('Git Pull', 'Carpeta actualizada exitosamente', 100);
+            window.showToast?.('Git Pull realizado exitosamente ✰');
+            loadDir(currentDirectory);
           } else {
             document.getElementById('cybercomProgress')?.classList.remove('active');
-            showAppDialog('Fallo de Git Push', d.error, true);
+            const errorMsg = d.error === 'AUTH_REQUIRED'
+              ? 'Autenticación requerida: El repositorio es privado o el token ingresado es incorrecto.'
+              : (d.error || 'Error al hacer pull');
+            showAppDialog('Fallo de Git Pull', errorMsg, true);
           }
         } catch {
           document.getElementById('cybercomProgress')?.classList.remove('active');
-          showAppDialog('Error de Conexión', 'No se pudo comunicar con el servidor para hacer push', true);
+          showAppDialog('Error de Conexión', 'No se pudo comunicar con el servidor para hacer pull', true);
         }
       };
     } catch {
       document.getElementById('cybercomProgress')?.classList.remove('active');
-      showAppDialog('Error de Red', 'Fallo al procesar git push', true);
+      showAppDialog('Error de Red', 'Fallo al procesar git pull', true);
     }
   } else if (action === 'edit') {
     openEditor(p);
@@ -525,7 +534,11 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
       window.showToast?.('Repositorio importado exitosamente ✰');
       loadDir(currentDirectory);
     } else {
-      showAppDialog('Fallo al Importar', d.error || 'Verifica la URL, rama o el Token', true);
+      document.getElementById('cybercomProgress')?.classList.remove('active');
+      const errText = d.error === 'PRIVATE_REPO_AUTH_REQUIRED'
+        ? 'Este repositorio es privado o requiere un Personal Access Token para clonar.'
+        : (d.error || 'Verifica la URL, rama o el Token');
+      showAppDialog('Fallo al Importar', errText, true);
     }
   } catch {
     showAppDialog('Error de Red', 'Fallo de conexión al importar desde GitHub', true);
