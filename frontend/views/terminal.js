@@ -1,8 +1,8 @@
 export function renderTerminal(container) {
   container.innerHTML = `
-    <div style="height: 100%; display: flex; flex-direction: column;">
-      <div class="terminal-box" id="termOutput">Conectando con WebSocket terminal...\n</div>
-      <input type="text" id="termInput" placeholder="Escribe un comando y presiona Enter..." style="margin-top: 8px;"/>
+    <div class="panel-box">
+      <div class="terminal-box" id="termOutput">Conectando con la terminal en VPS...\n</div>
+      <input type="text" id="termInput" class="param-input" placeholder="Escribe un comando bash y pulsa Enter..." style="margin-top: 12px;"/>
     </div>
   `;
 
