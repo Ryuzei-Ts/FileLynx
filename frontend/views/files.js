@@ -15,19 +15,39 @@ function showAppDialog(title, message, isError = false) {
   modal.classList.add('active');
 }
 
+function updateProgress(title, msg, pct) {
+  const card = document.getElementById('cybercomProgress');
+  if (!card) return;
+  card.classList.add('active');
+  document.getElementById('cybercomTitle').innerText = title;
+  document.getElementById('cybercomMsg').innerText = msg;
+  document.getElementById('cybercomBar').style.width = `${pct}%`;
+  document.getElementById('cybercomPct').innerText = `${pct}% Complete`;
+  if (pct >= 100) {
+    setTimeout(() => card.classList.remove('active'), 1800);
+  }
+}
+
 export async function renderFiles(container, initialPath = '') {
   currentDirectory = initialPath;
 
   container.innerHTML = `
-    <div class="progress-card" id="taskProgressBar">
-      <div class="progress-header">
-        <h4 style="font-size:0.85rem; font-weight:800;" id="progTitle">Operación en curso</h4>
-        <i class="fas fa-spinner fa-spin text-primary"></i>
+    <!-- Card de Progreso Cybercom682 adaptada -->
+    <div class="u-progress-card" id="cybercomProgress">
+      <div class="u-progress-header">
+        <h3 class="u-progress-title" id="cybercomTitle">Progress</h3>
+        <svg stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" fill="none" style="width:22px; height:22px; color:var(--text-dark);" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linejoin="round" stroke-linecap="round"></path>
+        </svg>
       </div>
-      <div class="progress-body">
-        <p style="font-size:0.75rem; color:var(--text-gray); margin-bottom:6px;" id="progLabel">Procesando...</p>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" id="progFill" style="width:0%;"></div>
+      <div class="u-progress-body">
+        <p class="u-progress-msg" id="cybercomMsg">File: processing...</p>
+        <div class="u-progress-track">
+          <div class="u-progress-bar" id="cybercomBar"></div>
+        </div>
+        <div class="u-progress-footer">
+          <span class="u-progress-pct" id="cybercomPct">0% Complete</span>
+          <button class="u-progress-details-btn" onclick="window.showToast?.('Proceso en background')">Details</button>
         </div>
       </div>
     </div>
@@ -179,7 +199,7 @@ async function loadDir(dirPath) {
       row.className = 'file-row';
       row.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; flex:1; overflow:hidden;">
-          <i class="${file.isDirectory ? 'fas fa-folder text-primary' : 'fas fa-file'}" style="color:${file.isDirectory ? '#2563eb' : '#64748b'}"></i>
+          <i class="${file.isDirectory ? 'fas fa-folder text-primary' : (file.isArchive ? 'fas fa-file-archive' : 'fas fa-file')}" style="color:${file.isDirectory ? '#2563eb' : (file.isArchive ? '#f59e0b' : '#64748b')}"></i>
           <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${file.name}</span>
           ${file.hasGit ? '<span style="font-size:0.65rem; background:rgba(37,99,235,0.15); color:var(--primary); padding:2px 6px; border-radius:4px; font-weight:800;">GIT</span>' : ''}
         </div>
@@ -215,10 +235,12 @@ async function loadDir(dirPath) {
 function openActionMenuForFile(file) {
   activeTargetFile = file;
   const actions = [
+    { label: 'Descargar', icon: 'fa-download', action: 'download' },
+    { label: 'Comprimir (.zip)', icon: 'fa-file-archive', action: 'compress' },
+    { label: 'Descomprimir', icon: 'fa-box-open', action: 'extract', hide: !file.isArchive },
     { label: 'Renombrar', icon: 'fa-pencil-alt', action: 'rename' },
     { label: 'Mover', icon: 'fa-arrows-alt', action: 'move' },
     { label: 'Git Push', icon: 'fa-cloud-upload-alt', action: 'git-push', hide: !file.hasGit },
-    { label: 'Descargar', icon: 'fa-download', action: 'download' },
     { label: 'Editar', icon: 'fa-edit', action: 'edit', hide: file.isDirectory },
     { label: 'Eliminar', icon: 'fa-trash', action: 'delete', danger: true },
   ];
@@ -261,7 +283,49 @@ window.executeRowAction = async function (action) {
   const file = activeTargetFile;
   const p = file.path;
 
-  if (action === 'rename') {
+  if (action === 'download') {
+    updateProgress('Downloading', `File: ${file.name}`, 40);
+    window.location.href = `/api/files/download?path=${encodeURIComponent(p)}`;
+    setTimeout(() => updateProgress('Downloaded', `${file.name} listo`, 100), 1200);
+  } else if (action === 'compress') {
+    updateProgress('Compressing', `Archiving: ${file.name}`, 35);
+    try {
+      const res = await fetch('/api/files/compress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: p, format: 'zip' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateProgress('Compressed', `Archivo: ${data.archiveName}`, 100);
+        window.showToast?.('Comprimido exitosamente ✰');
+        loadDir(currentDirectory);
+      } else {
+        showAppDialog('Error al Comprimir', data.error, true);
+      }
+    } catch {
+      showAppDialog('Error', 'Fallo al comprimir el archivo', true);
+    }
+  } else if (action === 'extract') {
+    updateProgress('Extracting', `File: ${file.name} extracted..`, 50);
+    try {
+      const res = await fetch('/api/files/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archivePath: p }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateProgress('Extracted', `${file.name} completado..`, 100);
+        window.showToast?.('Descomprimido exitosamente ꕤ');
+        loadDir(currentDirectory);
+      } else {
+        showAppDialog('Error al Descomprimir', data.error, true);
+      }
+    } catch {
+      showAppDialog('Error', 'Fallo al descomprimir el archivo', true);
+    }
+  } else if (action === 'rename') {
     document.getElementById('renameOldNameInput').value = file.name;
     document.getElementById('renameNewNameInput').value = file.name;
     document.getElementById('modalRename').classList.add('active');
@@ -322,7 +386,7 @@ window.executeRowAction = async function (action) {
 
       localStorage.setItem('filelynx_gh_token', token);
       document.getElementById('modalGitPush').classList.remove('active');
-      window.showToast?.('Ejecutando git push...');
+      updateProgress('Git Push', `Pushing to ${repoUrl}...`, 50);
 
       const folder = file.isDirectory ? file.path : currentDirectory;
       try {
@@ -333,6 +397,7 @@ window.executeRowAction = async function (action) {
         });
         const data = await res.json();
         if (data.success) {
+          updateProgress('Git Push', 'Cambios enviados exitosamente', 100);
           showAppDialog('Git Push Exitoso', 'Los cambios se han enviado correctamente a GitHub.');
         } else {
           showAppDialog('Fallo de Git Push', data.error, true);
@@ -343,8 +408,6 @@ window.executeRowAction = async function (action) {
     };
   } else if (action === 'edit') {
     openEditor(p);
-  } else if (action === 'download') {
-    window.location.href = `/api/files/download?path=${encodeURIComponent(p)}`;
   } else if (action === 'delete') {
     document.getElementById('deleteItemPromptText').innerText = `¿Estás seguro de que deseas eliminar permanentemente "${file.name}"?`;
     document.getElementById('modalDeleteConfirm').classList.add('active');
@@ -383,12 +446,7 @@ async function openEditor(filePath) {
 
 async function handleUpload(files) {
   if (!files || files.length === 0) return;
-  const bar = document.getElementById('taskProgressBar');
-  const fill = document.getElementById('progFill');
-  const label = document.getElementById('progLabel');
-  bar.classList.add('active');
-  fill.style.width = '20%';
-  label.innerText = `Subiendo ${files.length} archivo(s)...`;
+  updateProgress('Uploading', `File: uploading ${files.length} items...`, 25);
 
   const formData = new FormData();
   for (let i = 0; i < files.length; i++) {
@@ -396,19 +454,16 @@ async function handleUpload(files) {
   }
 
   try {
-    fill.style.width = '65%';
+    updateProgress('Uploading', `Processing files...`, 65);
     await fetch(`/api/upload?path=${encodeURIComponent(currentDirectory)}`, {
       method: 'POST',
       body: formData,
     });
-    fill.style.width = '100%';
-    label.innerText = 'Subida finalizada con éxito';
+    updateProgress('Uploaded', `Completado exitosamente`, 100);
     window.showToast?.('Archivos subidos correctamente ꕤ');
-    setTimeout(() => bar.classList.remove('active'), 1500);
     loadDir(currentDirectory);
   } catch {
-    label.innerText = 'Error al subir';
-    setTimeout(() => bar.classList.remove('active'), 2500);
+    showAppDialog('Error', 'Fallo al subir archivos a la VPS', true);
   }
 }
 
@@ -426,7 +481,7 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
   }
 
   document.getElementById('modalGithub').classList.remove('active');
-  window.showToast?.('Iniciando clonación desde GitHub...');
+  updateProgress('Cloning', `Repository: ${repoUrl}`, 40);
 
   try {
     const res = await fetch('/api/files/github-import', {
@@ -436,6 +491,7 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
     });
     const d = await res.json();
     if (d.success) {
+      updateProgress('Cloned', `Repo: ${repoUrl} cloned`, 100);
       window.showToast?.('Repositorio importado exitosamente ✰');
       loadDir(currentDirectory);
     } else {
