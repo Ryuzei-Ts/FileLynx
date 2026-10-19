@@ -25,6 +25,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 export const app = express();
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 const ipRateLimits = new Map<string, { count: number; expiresAt: number }>();
 
@@ -60,9 +61,14 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
 
-  const rawUrl = decodeURIComponent(req.originalUrl || req.url);
-  if (rawUrl.includes('\0') || /(\.\.[\/\\])/.test(rawUrl)) {
-    res.status(400).json({ error: 'Petición bloqueada por seguridad' });
+  try {
+    const rawUrl = decodeURIComponent(req.originalUrl || req.url);
+    if (rawUrl.includes('\0') || /(\.\.[\/\\])/.test(rawUrl)) {
+      res.status(400).json({ error: 'Petición bloqueada por seguridad' });
+      return;
+    }
+  } catch {
+    res.status(400).json({ error: 'URL malformada' });
     return;
   }
 
@@ -72,7 +78,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   if (err instanceof SyntaxError && 'body' in err) {
     res.status(400).json({ error: 'JSON malformado recibido' });
     return;
@@ -87,7 +93,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: config.NODE_ENV === 'production',
+      secure: false,
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 1000 * 60 * 60 * 24,
