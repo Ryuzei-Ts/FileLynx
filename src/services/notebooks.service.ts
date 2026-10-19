@@ -1,10 +1,18 @@
-import { db } from '#db';
+import vm from 'node:vm';
 import crypto from 'node:crypto';
-import type { NotebookDocument } from '#types';
+import { db } from '#db';
+import type { NotebookDocument, NotebookCell } from '#types';
+
+interface NotebookRow {
+  id: string;
+  title: string;
+  content: string;
+  updated_at: string;
+}
 
 export const notebooksService = {
   list(): NotebookDocument[] {
-    const rows = db.prepare('SELECT id, title, content, updated_at FROM notebooks ORDER BY updated_at DESC').all() as any[];
+    const rows = db.prepare('SELECT id, title, content, updated_at FROM notebooks ORDER BY updated_at DESC').all() as NotebookRow[];
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -14,7 +22,7 @@ export const notebooksService = {
   },
 
   get(id: string): NotebookDocument | null {
-    const row = db.prepare('SELECT id, title, content, updated_at FROM notebooks WHERE id = ?').get(id) as any;
+    const row = db.prepare('SELECT id, title, content, updated_at FROM notebooks WHERE id = ?').get(id) as NotebookRow | undefined;
     if (!row) return null;
     return {
       id: row.id,
@@ -26,7 +34,7 @@ export const notebooksService = {
 
   save(notebook: Partial<NotebookDocument>): NotebookDocument {
     const id = notebook.id || crypto.randomUUID();
-    const title = notebook.title || 'Untitled Notebook';
+    const title = notebook.title || 'Nuevo Notebook';
     const content = JSON.stringify(notebook.cells || []);
     db.prepare(`
       INSERT INTO notebooks (id, title, content, updated_at) 
@@ -39,5 +47,35 @@ export const notebooksService = {
 
   delete(id: string): void {
     db.prepare('DELETE FROM notebooks WHERE id = ?').run(id);
+  },
+
+  async runCodeCell(code: string): Promise<string> {
+    const logs: string[] = [];
+    const customConsole = {
+      log: (...args: unknown[]) => logs.push(args.map((a) => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a))).join(' ')),
+      error: (...args: unknown[]) => logs.push('[ERROR] ' + args.map(String).join(' ')),
+      warn: (...args: unknown[]) => logs.push('[WARN] ' + args.map(String).join(' ')),
+    };
+
+    const sandbox = {
+      console: customConsole,
+      setTimeout,
+      clearTimeout,
+      Buffer,
+      process: { env: { NODE_ENV: 'sandbox' } },
+    };
+
+    const context = vm.createContext(sandbox);
+    try {
+      const script = new vm.Script(code);
+      const result = script.runInContext(context, { timeout: 4000 });
+      if (result !== undefined) {
+        logs.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
+      }
+      return logs.join('\n') || '[Ejecutado sin retorno]';
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.stack || err.message : String(err);
+      return `Error: ${message}`;
+    }
   },
 };
