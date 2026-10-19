@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream, existsSync } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { exec } from 'node:child_process';
@@ -53,12 +53,12 @@ export const filesService = {
     await fs.rename(oldSafe, newSafe);
   },
 
-  async move(sourceRelativePath: string, destinationFolderPath: string): Promise<void> {
-    const sourceSafe = resolveSafePath(sourceRelativePath);
-    const destFolderSafe = resolveSafePath(destinationFolderPath);
-    const fileName = path.basename(sourceSafe);
-    const finalDest = path.join(destFolderSafe, fileName);
-    await fs.rename(sourceSafe, finalDest);
+  async move(sourcePath: string, destinationDir: string): Promise<void> {
+    const srcSafe = resolveSafePath(sourcePath);
+    const destDirSafe = resolveSafePath(destinationDir);
+    const fileName = path.basename(srcSafe);
+    const targetPath = path.join(destDirSafe, fileName);
+    await fs.rename(srcSafe, targetPath);
   },
 
   async remove(relativeFilePath: string): Promise<void> {
@@ -110,33 +110,17 @@ export const filesService = {
     const zipPath = path.join(targetFolder, `${repoName}.zip`);
 
     if (!res.body) throw new Error('Cuerpo de respuesta vacío desde GitHub');
-    // @ts-ignore Node stream pipeline
+    // @ts-ignore
     await pipeline(res.body, createWriteStream(zipPath));
   },
 
-  async gitPushRepo(relativeDirectory: string, message: string, token: string, user: string, repoUrl: string): Promise<string> {
-    const targetDir = resolveSafePath(relativeDirectory);
-    const hasGit = existsSync(path.join(targetDir, '.git'));
+  async gitPush(targetFolder: string, repoUrl: string, token: string, commitMsg: string = 'Update from FileLynx', branch: string = 'main'): Promise<string> {
+    const safeDir = resolveSafePath(targetFolder);
+    const cleanRepo = repoUrl.replace(/^https?:\/\/([^@]+@)?github\.com\//, '').replace(/\.git$/, '').trim();
+    const authRemote = `https://${token ? token + '@' : ''}github.com/${cleanRepo}.git`;
 
-    let remoteWithAuth = repoUrl.replace(/^https?:\/\//, '');
-    if (token && user) {
-      remoteWithAuth = `https://${encodeURIComponent(user)}:${encodeURIComponent(token)}@${remoteWithAuth}`;
-    } else if (token) {
-      remoteWithAuth = `https://${encodeURIComponent(token)}@${remoteWithAuth}`;
-    } else {
-      remoteWithAuth = `https://${remoteWithAuth}`;
-    }
-
-    const safeMessage = (message || 'update from FileLynx').replace(/"/g, '\\"');
-
-    let cmds = '';
-    if (!hasGit) {
-      cmds = `git init && git checkout -B main && git add -A && git commit -m "${safeMessage}" && git remote add origin "${remoteWithAuth}" && git push -u origin main --force`;
-    } else {
-      cmds = `git remote set-url origin "${remoteWithAuth}" && git add -A && git commit -m "${safeMessage}" || true && git push origin HEAD`;
-    }
-
-    const { stdout, stderr } = await execAsync(cmds, { cwd: targetDir });
-    return stdout || stderr || 'Push ejecutado exitosamente';
+    const cmd = `cd "${safeDir}" && git init && git config user.name "FileLynx" && git config user.email "filelynx@local" && git remote remove origin 2>/dev/null || true && git remote add origin "${authRemote}" && git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true && git branch -M "${branch}" && git push -u origin "${branch}" --force`;
+    const { stdout, stderr } = await execAsync(cmd);
+    return stdout || stderr;
   },
 };
