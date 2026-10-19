@@ -1,6 +1,20 @@
 let currentDirectory = '';
 let activeTargetFile = null;
 
+function showAppDialog(title, message, isError = false) {
+  const modal = document.getElementById('modalAppAlert');
+  if (!modal) return;
+  document.getElementById('modalAlertTitle').innerText = title;
+  document.getElementById('modalAlertMessage').innerText = message;
+  const icon = document.getElementById('modalAlertIcon');
+  if (isError) {
+    icon.innerHTML = '<i class="fas fa-exclamation-circle" style="color:#ef4444;"></i>';
+  } else {
+    icon.innerHTML = '<i class="fas fa-info-circle" style="color:var(--primary);"></i>';
+  }
+  modal.classList.add('active');
+}
+
 export async function renderFiles(container, initialPath = '') {
   currentDirectory = initialPath;
 
@@ -167,6 +181,7 @@ async function loadDir(dirPath) {
         <div style="display:flex; align-items:center; gap:10px; flex:1; overflow:hidden;">
           <i class="${file.isDirectory ? 'fas fa-folder text-primary' : 'fas fa-file'}" style="color:${file.isDirectory ? '#2563eb' : '#64748b'}"></i>
           <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${file.name}</span>
+          ${file.hasGit ? '<span style="font-size:0.65rem; background:rgba(37,99,235,0.15); color:var(--primary); padding:2px 6px; border-radius:4px; font-weight:800;">GIT</span>' : ''}
         </div>
         <div style="display:flex; align-items:center; gap:12px;">
           <span style="font-size:0.75rem; color:var(--text-gray);">${file.isDirectory ? 'Directorio' : `${file.size} B`}</span>
@@ -202,7 +217,7 @@ function openActionMenuForFile(file) {
   const actions = [
     { label: 'Renombrar', icon: 'fa-pencil-alt', action: 'rename' },
     { label: 'Mover', icon: 'fa-arrows-alt', action: 'move' },
-    { label: 'Git Push', icon: 'fa-cloud-upload-alt', action: 'git-push' },
+    { label: 'Git Push', icon: 'fa-cloud-upload-alt', action: 'git-push', hide: !file.hasGit },
     { label: 'Descargar', icon: 'fa-download', action: 'download' },
     { label: 'Editar', icon: 'fa-edit', action: 'edit', hide: file.isDirectory },
     { label: 'Eliminar', icon: 'fa-trash', action: 'delete', danger: true },
@@ -286,7 +301,7 @@ window.executeRowAction = async function (action) {
         window.showToast?.('Elemento movido exitosamente ꕤ');
         loadDir(currentDirectory);
       } else {
-        alert(data.error || 'Error al mover elemento');
+        showAppDialog('Error al Mover', data.error || 'No se pudo mover el elemento', true);
       }
     };
   } else if (action === 'git-push') {
@@ -301,7 +316,7 @@ window.executeRowAction = async function (action) {
       const commitMsg = document.getElementById('pushCommitMsg').value.trim() || 'Update from FileLynx';
 
       if (!repoUrl || !token) {
-        alert('Ingresa el repositorio y el Token de GitHub');
+        showAppDialog('Datos Incompletos', 'Ingresa la URL del repositorio y tu Personal Access Token', true);
         return;
       }
 
@@ -318,12 +333,12 @@ window.executeRowAction = async function (action) {
         });
         const data = await res.json();
         if (data.success) {
-          window.showToast?.('Git Push realizado exitosamente ✰');
+          showAppDialog('Git Push Exitoso', 'Los cambios se han enviado correctamente a GitHub.');
         } else {
-          alert('Error en Git Push: ' + data.error);
+          showAppDialog('Fallo de Git Push', data.error, true);
         }
       } catch {
-        alert('Fallo de conexión al hacer push');
+        showAppDialog('Error de Conexión', 'No se pudo comunicar con el servidor para hacer push', true);
       }
     };
   } else if (action === 'edit') {
@@ -362,7 +377,7 @@ async function openEditor(filePath) {
       document.getElementById('modalEditor').classList.remove('active');
     };
   } catch {
-    window.showToast?.('No se pudo leer el archivo seleccionado');
+    showAppDialog('Error al Abrir', 'No se pudo leer el archivo seleccionado', true);
   }
 }
 
@@ -405,10 +420,13 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
   const repoUrl = document.getElementById('ghRepoUrl').value.trim();
   const branch = document.getElementById('ghBranch').value.trim();
   const token = document.getElementById('ghToken').value.trim();
-  if (!repoUrl) return alert('Ingresa la URL del repositorio');
+  if (!repoUrl) {
+    showAppDialog('Campo Requerido', 'Ingresa la URL o el nombre del repositorio (usuario/repo)', true);
+    return;
+  }
 
   document.getElementById('modalGithub').classList.remove('active');
-  window.showToast?.('Iniciando descarga desde GitHub...');
+  window.showToast?.('Iniciando clonación desde GitHub...');
 
   try {
     const res = await fetch('/api/files/github-import', {
@@ -418,12 +436,12 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
     });
     const d = await res.json();
     if (d.success) {
-      window.showToast?.('Repositorio importado exitosamente como .zip ✰');
+      window.showToast?.('Repositorio importado exitosamente ✰');
       loadDir(currentDirectory);
     } else {
-      alert(`Error de descarga: ${d.error}`);
+      showAppDialog('Fallo al Importar', d.error || 'Verifica la URL, rama o el Token', true);
     }
   } catch {
-    alert('Fallo de conexión al importar GitHub');
+    showAppDialog('Error de Red', 'Fallo de conexión al importar desde GitHub', true);
   }
 };
