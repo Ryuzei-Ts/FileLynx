@@ -15,16 +15,10 @@ export async function renderChangelog(container) {
           Editor web ligero, terminal interactiva bash PTY sobre WebSockets, bloc de notas y explorador de archivos para VPS.
         </p>
 
-        <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
+        <div style="margin-top:16px;">
           <button class="btn-full" id="btnRunPull" style="padding:14px; font-size:0.95rem; font-weight:800;">
             <i class="fas fa-sync-alt"></i> Actualizar Sistema (Git Pull)
           </button>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px;">
-            <span style="font-size:0.75rem; color:var(--text-gray);">¿Prefieres hacerlo por terminal?</span>
-            <button class="stat-btn" id="btnCopyCmd" style="font-size:0.72rem; padding:4px 8px;">
-              <i class="fas fa-copy"></i> Copiar comando manual
-            </button>
-          </div>
         </div>
       </div>
 
@@ -67,13 +61,6 @@ export async function renderChangelog(container) {
 
   document.getElementById('btnRunPull').onclick = () => executeSystemUpdate();
 
-  document.getElementById('btnCopyCmd').onclick = () => {
-    const text = 'cd ~/FileLynx && git pull origin main && pm2 restart filelynx';
-    navigator.clipboard.writeText(text).then(() => {
-      window.showToast?.('Comando copiado al portapapeles ✰');
-    });
-  };
-
   checkRemoteGithub();
   loadRemoteChangelog();
 }
@@ -108,8 +95,7 @@ async function executeSystemUpdate(tokenOverride = '') {
     }
 
     if (data.success) {
-      const msg = data.isUpToDate ? 'El sistema ya está en la versión más reciente ✰' : 'Actualización completada con éxito ꕤ';
-      window.showToast?.(msg);
+      window.showToast?.(data.message || 'Actualización completada ꕤ');
       loadRemoteChangelog();
       checkRemoteGithub();
     } else {
