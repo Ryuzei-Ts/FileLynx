@@ -1,10 +1,9 @@
 export async function renderNotebooks(container) {
   container.innerHTML = `
-    <div style="margin-bottom: 12px; display: flex; justify-content: space-between;">
-      <h2>Notebooks Interactivos</h2>
-      <button id="btnNewNotebook">+ Nuevo</button>
+    <div class="panel-box">
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 12px;">Notebooks Interactivos</h3>
+      <div id="notebookList">Cargando cuadernos...</div>
     </div>
-    <div id="notebookList">Cargando cuadernos...</div>
   `;
 
   const res = await fetch('/api/notebooks');
@@ -12,10 +11,10 @@ export async function renderNotebooks(container) {
   const list = document.getElementById('notebookList');
   list.innerHTML = '';
 
-  (data.notebooks || []).forEach(nb => {
+  (data.notebooks || []).forEach((nb) => {
     const item = document.createElement('div');
     item.className = 'file-row';
-    item.innerHTML = `<strong>${nb.title}</strong> — <small>${nb.updatedAt}</small>`;
+    item.innerHTML = `<b>${nb.title}</b> <small style="color:var(--text-gray);">${nb.updatedAt}</small>`;
     list.appendChild(item);
   });
 }
