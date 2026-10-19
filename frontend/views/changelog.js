@@ -9,7 +9,6 @@ export async function renderChangelog(container) {
         <button class="stat-btn" id="btnCheckUpdates"><i class="fas fa-sync-alt"></i> Comprobar Actualización</button>
       </div>
 
-      <!-- Estado de la versión -->
       <div class="changelog-card" style="border-left:4px solid var(--primary);">
         <span class="changelog-version-tag">INSTALADO ACTUALMENTE: v0.1.0</span>
         <h4 style="font-weight:800; font-size:1.05rem; margin-bottom:6px;">FileLynx Cloud Web IDE</h4>
@@ -26,74 +25,98 @@ export async function renderChangelog(container) {
         </div>
       </div>
 
-      <!-- Estado en GitHub -->
       <div class="changelog-card" id="githubStatusCard">
         <h4 style="font-weight:800; font-size:0.95rem; margin-bottom:10px;">
-          <i class="fab fa-github"></i> Estado en Repositorio GitHub
+          <i class="fab fa-github"></i> Estado del Repositorio
         </h4>
         <div id="ghFetchResult" style="font-size:0.82rem; color:var(--text-gray);">
-          Haz clic en "Comprobar Actualización" para inspeccionar <code>frontend/views/files.js</code> en GitHub.
+          Haz clic en "Comprobar Actualización" para inspeccionar <code>https://github.com/Ryuzei-Ts/FileLynx</code>.
         </div>
       </div>
 
-      <!-- Historial de versiones -->
       <div class="changelog-card">
-        <h4 style="font-weight:800; font-size:0.95rem; margin-bottom:12px;">Historial de Versiones</h4>
-        <ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:12px; font-size:0.84rem;">
-          <li style="border-bottom:1px solid var(--border); padding-bottom:10px;">
-            <b>v0.1.0 (Versión Actual)</b> &bull; <small style="color:var(--text-gray);">Octubre 2026</small>
-            <ul style="margin-left:18px; margin-top:4px; color:var(--text-gray); line-height:1.45;">
-              <li>Bloc de notas estilo iOS integrado con autoguardado.</li>
-              <li>Terminal clara con texto azul y sanitización completa de secuencias ANSI.</li>
-              <li>Modal de subida centralizado con soporte para archivos, carpetas completas y GitHub.</li>
-              <li>Rutas limpias tipo SPA con soporte para retroceso nativo de navegador móvil.</li>
-            </ul>
-          </li>
-        </ul>
+        <h4 style="font-weight:800; font-size:0.95rem; margin-bottom:12px;">Historial de Versiones (CHANGELOG.md)</h4>
+        <div id="changelogMarkdownViewer" style="font-size:0.85rem; line-height:1.6; color:var(--text-dark); white-space:pre-wrap; background:var(--bg-params); padding:16px; border-radius:12px; border:1px solid var(--border);">
+          Cargando CHANGELOG.md desde GitHub...
+        </div>
       </div>
     </div>
   `;
 
-  document.getElementById('btnCheckUpdates').onclick = checkRemoteGithub;
+  document.getElementById('btnCheckUpdates').onclick = () => {
+    checkRemoteGithub();
+    loadRemoteChangelog();
+  };
+
   window.copyUpdateCommand = () => {
     navigator.clipboard.writeText('git pull origin main && pm2 restart filelynx');
     window.showToast?.('Comando copiado al portapapeles ✰');
   };
 
   checkRemoteGithub();
+  loadRemoteChangelog();
 }
 
 async function checkRemoteGithub() {
   const resultDiv = document.getElementById('ghFetchResult');
   if (!resultDiv) return;
-  resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando con GitHub API...';
+  resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando con GitHub...';
 
   try {
-    const rawUrl = 'https://raw.githubusercontent.com/Ryuzei-Ts/FileLynx/main/frontend/views/files.js';
-    const res = await fetch(rawUrl, { cache: 'no-store' });
+    const res = await fetch('https://api.github.com/repos/Ryuzei-Ts/FileLynx', { cache: 'no-store' });
 
     if (!res.ok) {
       throw new Error(`Código HTTP ${res.status}`);
     }
 
-    const content = await res.text();
-    const sizeKB = (content.length / 1024).toFixed(1);
+    const repo = await res.json();
+    const lastUpdate = repo.pushed_at ? new Date(repo.pushed_at).toLocaleString('es-ES') : 'Reciente';
 
     resultDiv.innerHTML = `
-      <div style="color:#10b981; font-weight:700; margin-bottom:6px;">
-        <i class="fas fa-check-circle"></i> Conectado con éxito a <code>frontend/views/files.js</code>
+      <div style="color:#10b981; font-weight:700; margin-bottom:10px;">
+        <i class="fas fa-check-circle"></i> Repositorio conectado: <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" style="color:var(--primary); text-decoration:underline;">https://github.com/Ryuzei-Ts/FileLynx</a>
       </div>
-      <div>Tamaño del archivo remoto: <b>${sizeKB} KB</b></div>
-      <div style="margin-top:6px;">
-        Tu servidor está listo para recibir actualizaciones ejecutando <code>git pull origin main && pm2 restart filelynx</code>.
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:8px;">
+        <div><b>Rama por defecto:</b> ${repo.default_branch || 'main'}</div>
+        <div><b>Última actualización:</b> ${lastUpdate}</div>
+        <div><b>Estrellas:</b> ${repo.stargazers_count ?? 0} ✰</div>
+        <div><b>Forks:</b> ${repo.forks_count ?? 0}</div>
+      </div>
+      <div style="margin-top:12px; color:var(--text-gray);">
+        Para sincronizar los últimos cambios en tu VPS:
+      </div>
+      <div class="command-copy-box" onclick="copyUpdateCommand()" style="margin-top:8px;">
+        <span>git pull origin main && pm2 restart filelynx</span>
+        <i class="fas fa-copy"></i>
       </div>
     `;
   } catch (err) {
     resultDiv.innerHTML = `
       <div style="color:#ef4444; font-weight:700;">
-        <i class="fas fa-exclamation-triangle"></i> No se pudo comprobar el archivo remoto (${err.message}).
+        <i class="fas fa-exclamation-triangle"></i> No se pudo consultar el repositorio remoto (${err.message}).
       </div>
-      <div style="margin-top:4px;">Asegúrate de que el repositorio sea público o de que tu VPS tenga conexión a Internet.</div>
+      <div style="margin-top:4px;">
+        Repositorio: <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" style="color:var(--primary); text-decoration:underline;">https://github.com/Ryuzei-Ts/FileLynx</a>
+      </div>
     `;
+  }
+}
+
+async function loadRemoteChangelog() {
+  const viewer = document.getElementById('changelogMarkdownViewer');
+  if (!viewer) return;
+
+  try {
+    const changelogUrl = 'https://raw.githubusercontent.com/Ryuzei-Ts/FileLynx/refs/heads/main/CHANGELOG.md';
+    const res = await fetch(changelogUrl, { cache: 'no-store' });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const markdownText = await res.text();
+    viewer.textContent = markdownText || 'No hay contenido disponible en CHANGELOG.md.';
+  } catch (err) {
+    viewer.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Error al cargar CHANGELOG.md: ${err.message}</span>`;
   }
 }
