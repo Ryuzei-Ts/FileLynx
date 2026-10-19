@@ -165,44 +165,46 @@ export const filesService = {
     let cleanRepo = repoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
     cleanRepo = cleanRepo.replace(/^[^@]+@github\.com\//, '').replace(/^github\.com\//, '').replace(/\.git$/, '');
 
-    const [owner, repo] = cleanRepo.split('/');
+    const parts = cleanRepo.split('/');
+    const owner = parts[0];
+    const repo = parts[1];
+
     if (!owner || !repo) {
-      throw new Error('Formato de repositorio inválido. Debe ser: usuario/repositorio');
+      throw new Error('Formato de repositorio inválido. Ejemplo: https://github.com/usuario/repositorio');
     }
 
-    const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
     const destinationPath = path.join(targetFolder, repo);
+    const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
 
-    // Limpiar si ya existe carpeta previa
+    let cloneUrl = `https://github.com/${owner}/${repo}.git`;
+
+    // Si la carpeta ya existe y tiene .git, simula estilo Pterodactyl (git pull)
+    let folderExists = false;
     try {
-      await fs.rm(destinationPath, { recursive: true, force: true });
+      const stat = await fs.stat(path.join(destinationPath, '.git'));
+      folderExists = stat.isDirectory();
     } catch {}
 
-    // Intentar primero clonación pública estándar
-    const publicUrl = `https://github.com/${owner}/${repo}.git`;
-    const publicCmd = `git clone --depth 1 ${branchArg} "${publicUrl}" "${destinationPath}"`;
+    if (token && token.trim()) {
+      // Formato Pterodactyl: https://username:token@github.com/owner/repo.git
+      cloneUrl = `https://${encodeURIComponent(owner)}:${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+    }
 
     try {
-      await execAsync(publicCmd);
-    } catch (pubErr: any) {
-      // Si falla y tenemos token, reintentar con autenticación privada
-      if (token && token.trim()) {
-        const privateUrl = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
-        const privateCmd = `git clone --depth 1 ${branchArg} "${privateUrl}" "${destinationPath}"`;
-        try {
-          await execAsync(privateCmd);
-          return;
-        } catch (privErr: any) {
-          const sanitized = (privErr.message || '').replace(new RegExp(token || '___', 'g'), '***');
-          throw new Error(sanitized);
-        }
+      if (folderExists) {
+        const pullCmd = `cd "${destinationPath}" && git pull origin ${branch && branch.trim() ? branch.trim() : 'main'}`;
+        await execAsync(pullCmd);
+      } else {
+        const cloneCmd = `git clone --depth 1 ${branchArg} "${cloneUrl}" "${destinationPath}"`;
+        await execAsync(cloneCmd);
       }
-
-      const errorText = pubErr.message || '';
-      if (errorText.includes('could not read Username') || errorText.includes('Authentication failed') || errorText.includes('Repository not found')) {
+    } catch (err: any) {
+      const errText = err.message || '';
+      const sanitized = errText.replace(new RegExp(token || '___', 'g'), '***');
+      if (errText.includes('could not read Username') || errText.includes('Authentication failed') || errText.includes('Repository not found')) {
         throw new Error('PRIVATE_REPO_AUTH_REQUIRED');
       }
-      throw new Error(errorText);
+      throw new Error(sanitized);
     }
   },
 
@@ -214,10 +216,17 @@ export const filesService = {
     const finalBranch = branch && branch.trim() ? branch.trim() : (gitInfo.branch || 'main');
 
     let setRemoteCmd = '';
-    if (token && token.trim() && finalRepoUrl) {
+    if (finalRepoUrl) {
       let clean = finalRepoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      clean = clean.replace(/^[^@]+@github\.com\//, 'github.com/').replace(/^github\.com\//, '').replace(/\.git$/, '');
-      const authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${clean}.git`;
+      clean = clean.replace(/^[^@]+@github\.com\//, '').replace(/^github\.com\//, '').replace(/\.git$/, '');
+      const parts = clean.split('/');
+      const owner = parts[parts.length - 2] || 'Ryuzei-Ts';
+      const repo = parts[parts.length - 1] || 'Repo';
+
+      let authRemote = `https://github.com/${owner}/${repo}.git`;
+      if (token && token.trim()) {
+        authRemote = `https://${encodeURIComponent(owner)}:${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+      }
       setRemoteCmd = `git remote set-url origin "${authRemote}" && `;
     }
 
