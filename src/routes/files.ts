@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { filesService } from '#services/files';
 import { resolveSafePath } from '#utils/paths';
@@ -91,6 +92,36 @@ router.post('/move', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+router.post('/compress', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { sourcePath, format } = req.body;
+    if (!sourcePath) {
+      res.status(400).json({ error: 'Ruta a comprimir requerida' });
+      return;
+    }
+    const archiveName = await filesService.compress(sourcePath, format || 'zip');
+    res.json({ success: true, archiveName });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Error al comprimir';
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post('/extract', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { archivePath, destinationDir } = req.body;
+    if (!archivePath) {
+      res.status(400).json({ error: 'Archivo a descomprimir requerido' });
+      return;
+    }
+    await filesService.extract(archivePath, destinationDir);
+    res.json({ success: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Error al descomprimir';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.delete('/delete', async (req: Request, res: Response): Promise<void> => {
   try {
     const filePath = req.query.path as string;
@@ -121,19 +152,33 @@ router.post('/folder', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-router.get('/download', (req: Request, res: Response): void => {
+router.get('/download', async (req: Request, res: Response): Promise<void> => {
   try {
-    const filePath = req.query.path as string;
-    if (!filePath) {
-      res.status(400).json({ error: 'Ruta requerida' });
+    const filePath = (req.query.path as string) || '';
+    const safePath = resolveSafePath(filePath);
+
+    if (!fs.existsSync(safePath)) {
+      res.status(404).send('Archivo no encontrado');
       return;
     }
-    const safePath = resolveSafePath(filePath);
-    const fileName = path.basename(safePath);
-    res.download(safePath, fileName);
+
+    const stat = fs.statSync(safePath);
+    if (stat.isDirectory()) {
+      const zipName = `${path.basename(safePath)}.zip`;
+      await filesService.compress(filePath, 'zip');
+      const safeZipPath = path.join(path.dirname(safePath), zipName);
+      res.download(safeZipPath, zipName, (err) => {
+        if (!err) {
+          fs.unlink(safeZipPath, () => {});
+        }
+      });
+      return;
+    }
+
+    res.download(safePath, path.basename(safePath));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al descargar';
-    res.status(500).json({ error: message });
+    res.status(500).send(message);
   }
 });
 
