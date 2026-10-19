@@ -189,31 +189,28 @@ export const filesService = {
     }
   },
 
-  async gitPush(targetFolder: string, repoUrl?: string, token?: string, commitMsg: string = 'Update from FileLynx', branch?: string): Promise<string> {
+  async gitPull(targetFolder: string, repoUrl?: string, token?: string, branch?: string): Promise<string> {
     const safeDir = resolveSafePath(targetFolder);
     const gitInfo = await this.getGitConfigInfo(targetFolder);
 
     const finalRepoUrl = repoUrl && repoUrl.trim() ? repoUrl.trim() : gitInfo.remoteUrl;
     const finalBranch = branch && branch.trim() ? branch.trim() : (gitInfo.branch || 'main');
 
-    if (!finalRepoUrl) {
-      throw new Error('No se encontró URL remota en .git/config');
-    }
-
-    let authRemote = finalRepoUrl;
-    if (token && token.trim()) {
+    let setRemoteCmd = '';
+    if (token && token.trim() && finalRepoUrl) {
       let clean = finalRepoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
       clean = clean.replace(/^[^@]+@github\.com\//, 'github.com/').replace(/^github\.com\//, '').replace(/\.git$/, '');
-      authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${clean}.git`;
+      const authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${clean}.git`;
+      setRemoteCmd = `git remote set-url origin "${authRemote}" && `;
     }
 
-    const cmd = `cd "${safeDir}" && git config user.name "FileLynx" && git config user.email "filelynx@local" && (git remote set-url origin "${authRemote}" 2>/dev/null || git remote add origin "${authRemote}") && git add -A && (git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true) && git push -u origin "${finalBranch}"`;
+    const cmd = `cd "${safeDir}" && ${setRemoteCmd}git pull origin "${finalBranch}"`;
 
     try {
       const { stdout, stderr } = await execAsync(cmd);
       return stdout || stderr;
     } catch (err: any) {
-      if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed') || err.message.includes('Permission to'))) {
+      if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed'))) {
         throw new Error('AUTH_REQUIRED');
       }
       const cleanMsg = (err.message || '').replace(new RegExp(token || '___', 'g'), '***');
