@@ -1,3 +1,49 @@
+function fallbackCopyText(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    window.showToast?.('Comando copiado ✰');
+  } catch {
+    window.showToast?.('No se pudo copiar automáticamente');
+  }
+  document.body.removeChild(textArea);
+}
+
+function formatMarkdownChangelog(raw) {
+  if (!raw) return 'No hay contenido disponible en CHANGELOG.md.';
+  const lines = raw.split('\n');
+  return lines.map((line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('# ')) {
+      return `<h2 style="font-size:1.15rem; font-weight:800; color:var(--text-dark); margin:12px 0 6px;">${escapeHtml(trimmed.slice(2))}</h2>`;
+    }
+    if (trimmed.startsWith('## ')) {
+      return `<h3 style="font-size:0.95rem; font-weight:800; color:var(--primary); margin:12px 0 4px;">${escapeHtml(trimmed.slice(3))}</h3>`;
+    }
+    if (trimmed.startsWith('### ')) {
+      return `<h4 style="font-size:0.85rem; font-weight:800; color:var(--text-dark); margin:8px 0 2px;">${escapeHtml(trimmed.slice(4))}</h4>`;
+    }
+    if (trimmed.startsWith('- ')) {
+      return `<div style="padding-left:14px; position:relative; margin-bottom:4px;">&bull; ${escapeHtml(trimmed.slice(2))}</div>`;
+    }
+    return trimmed ? `<div>${escapeHtml(trimmed)}</div>` : '<div style="height:6px;"></div>';
+  }).join('');
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export async function renderChangelog(container) {
   container.innerHTML = `
     <div class="panel-box">
@@ -18,8 +64,8 @@ export async function renderChangelog(container) {
 
         <div style="margin-top:14px;">
           <span style="font-size:0.75rem; font-weight:800; color:var(--text-gray); text-transform:uppercase;">Comando para actualizar en tu VPS:</span>
-          <div class="command-copy-box" onclick="copyUpdateCommand()" title="Haz clic para copiar">
-            <span id="cmdText">git pull origin main && pm2 restart filelynx</span>
+          <div class="command-copy-box" id="btnCopyCmd" title="Haz clic para copiar">
+            <span id="cmdText">cd ~/FileLynx && git pull origin main && pm2 restart filelynx</span>
             <i class="fas fa-copy"></i>
           </div>
         </div>
@@ -30,27 +76,34 @@ export async function renderChangelog(container) {
           <i class="fab fa-github"></i> Estado del Repositorio
         </h4>
         <div id="ghFetchResult" style="font-size:0.82rem; color:var(--text-gray);">
-          Haz clic en "Comprobar Actualización" para inspeccionar <code>https://github.com/Ryuzei-Ts/FileLynx</code>.
+          Haz clic en "Comprobar Actualización" para inspeccionar el estado en GitHub.
         </div>
       </div>
 
       <div class="changelog-card">
         <h4 style="font-weight:800; font-size:0.95rem; margin-bottom:12px;">Historial de Versiones (CHANGELOG.md)</h4>
-        <div id="changelogMarkdownViewer" style="font-size:0.85rem; line-height:1.6; color:var(--text-dark); white-space:pre-wrap; background:var(--bg-params); padding:16px; border-radius:12px; border:1px solid var(--border);">
+        <div id="changelogMarkdownViewer" style="font-size:0.85rem; line-height:1.6; color:var(--text-dark); background:var(--bg-params); padding:16px; border-radius:12px; border:1px solid var(--border); max-height:420px; overflow-y:auto;">
           Cargando CHANGELOG.md desde GitHub...
         </div>
       </div>
     </div>
   `;
 
+  const copyBtn = document.getElementById('btnCopyCmd');
+  copyBtn.onclick = () => {
+    const text = 'cd ~/FileLynx && git pull origin main && pm2 restart filelynx';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => window.showToast?.('Comando copiado ✰'))
+        .catch(() => fallbackCopyText(text));
+    } else {
+      fallbackCopyText(text);
+    }
+  };
+
   document.getElementById('btnCheckUpdates').onclick = () => {
     checkRemoteGithub();
     loadRemoteChangelog();
-  };
-
-  window.copyUpdateCommand = () => {
-    navigator.clipboard.writeText('git pull origin main && pm2 restart filelynx');
-    window.showToast?.('Comando copiado al portapapeles ✰');
   };
 
   checkRemoteGithub();
@@ -74,7 +127,7 @@ async function checkRemoteGithub() {
 
     resultDiv.innerHTML = `
       <div style="color:#10b981; font-weight:700; margin-bottom:10px;">
-        <i class="fas fa-check-circle"></i> Repositorio conectado: <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" style="color:var(--primary); text-decoration:underline;">https://github.com/Ryuzei-Ts/FileLynx</a>
+        <i class="fas fa-check-circle"></i> Repositorio conectado correctamente
       </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:8px;">
         <div><b>Rama por defecto:</b> ${repo.default_branch || 'main'}</div>
@@ -82,21 +135,11 @@ async function checkRemoteGithub() {
         <div><b>Estrellas:</b> ${repo.stargazers_count ?? 0} ✰</div>
         <div><b>Forks:</b> ${repo.forks_count ?? 0}</div>
       </div>
-      <div style="margin-top:12px; color:var(--text-gray);">
-        Para sincronizar los últimos cambios en tu VPS:
-      </div>
-      <div class="command-copy-box" onclick="copyUpdateCommand()" style="margin-top:8px;">
-        <span>git pull origin main && pm2 restart filelynx</span>
-        <i class="fas fa-copy"></i>
-      </div>
     `;
   } catch (err) {
     resultDiv.innerHTML = `
       <div style="color:#ef4444; font-weight:700;">
         <i class="fas fa-exclamation-triangle"></i> No se pudo consultar el repositorio remoto (${err.message}).
-      </div>
-      <div style="margin-top:4px;">
-        Repositorio: <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" style="color:var(--primary); text-decoration:underline;">https://github.com/Ryuzei-Ts/FileLynx</a>
       </div>
     `;
   }
@@ -115,7 +158,7 @@ async function loadRemoteChangelog() {
     }
 
     const markdownText = await res.text();
-    viewer.textContent = markdownText || 'No hay contenido disponible en CHANGELOG.md.';
+    viewer.innerHTML = formatMarkdownChangelog(markdownText);
   } catch (err) {
     viewer.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Error al cargar CHANGELOG.md: ${err.message}</span>`;
   }
