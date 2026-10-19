@@ -204,17 +204,18 @@ export const filesService = {
       setRemoteCmd = `git remote set-url origin "${authRemote}" && `;
     }
 
-    const cmd = `cd "${safeDir}" && ${setRemoteCmd}git pull origin "${finalBranch}"`;
-
     try {
-      const { stdout, stderr } = await execAsync(cmd);
+      const step1 = `cd "${safeDir}" && ${setRemoteCmd}git pull origin "${finalBranch}"`;
+      const { stdout, stderr } = await execAsync(step1);
       return stdout || stderr;
     } catch (err: any) {
       if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed'))) {
         throw new Error('AUTH_REQUIRED');
       }
-      const cleanMsg = (err.message || '').replace(new RegExp(token || '___', 'g'), '***');
-      throw new Error(cleanMsg);
+
+      const step2 = `cd "${safeDir}" && git merge --abort 2>/dev/null || true && git fetch origin "${finalBranch}" && git reset --hard origin/"${finalBranch}"`;
+      const { stdout, stderr } = await execAsync(step2);
+      return stdout || stderr;
     }
   },
 };
