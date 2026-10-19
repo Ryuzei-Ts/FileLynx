@@ -77,8 +77,43 @@ export async function renderFiles(container, initialPath = '') {
     loadDir(parentPath);
   };
 
-  document.getElementById('btnNewFile').onclick = createPromptFile;
-  document.getElementById('btnNewDir').onclick = createPromptFolder;
+  document.getElementById('btnNewFile').onclick = () => {
+    document.getElementById('newFileNameInput').value = '';
+    document.getElementById('modalNewFile').classList.add('active');
+  };
+
+  document.getElementById('btnConfirmNewFile').onclick = async () => {
+    const name = document.getElementById('newFileNameInput').value.trim();
+    if (!name) return;
+    document.getElementById('modalNewFile').classList.remove('active');
+    const full = currentDirectory ? `${currentDirectory}/${name}` : name;
+    await fetch('/api/files/create-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: full, content: '' }),
+    });
+    window.showToast?.('Archivo creado exitosamente ✰');
+    loadDir(currentDirectory);
+  };
+
+  document.getElementById('btnNewDir').onclick = () => {
+    document.getElementById('newFolderNameInput').value = '';
+    document.getElementById('modalNewFolder').classList.add('active');
+  };
+
+  document.getElementById('btnConfirmNewFolder').onclick = async () => {
+    const name = document.getElementById('newFolderNameInput').value.trim();
+    if (!name) return;
+    document.getElementById('modalNewFolder').classList.remove('active');
+    const full = currentDirectory ? `${currentDirectory}/${name}` : name;
+    await fetch('/api/files/folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: full }),
+    });
+    window.showToast?.('Carpeta creada exitosamente ꕤ');
+    loadDir(currentDirectory);
+  };
 
   document.getElementById('btnOpenImport').onclick = () => {
     document.getElementById('modalImportCenter').classList.add('active');
@@ -183,31 +218,45 @@ window.triggerFileAction = async function (action) {
   const p = activeSelectedFile.path;
 
   if (action === 'rename') {
-    const newName = prompt('Nuevo nombre:', activeSelectedFile.name);
-    if (!newName || newName === activeSelectedFile.name) return;
-    const dir = p.includes('/') ? p.substring(0, p.lastIndexOf('/')) : '';
-    const newPath = dir ? `${dir}/${newName}` : newName;
-    await fetch('/api/files/rename', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPath: p, newPath }),
-    });
-    window.showToast?.('Renombrado exitosamente');
-    loadDir(currentDirectory);
+    document.getElementById('renameOldNameInput').value = activeSelectedFile.name;
+    document.getElementById('renameNewNameInput').value = activeSelectedFile.name;
+    document.getElementById('modalRename').classList.add('active');
+
+    document.getElementById('btnConfirmRename').onclick = async () => {
+      const newName = document.getElementById('renameNewNameInput').value.trim();
+      if (!newName || newName === activeSelectedFile.name) {
+        document.getElementById('modalRename').classList.remove('active');
+        return;
+      }
+      document.getElementById('modalRename').classList.remove('active');
+      const dir = p.includes('/') ? p.substring(0, p.lastIndexOf('/')) : '';
+      const newPath = dir ? `${dir}/${newName}` : newName;
+      await fetch('/api/files/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPath: p, newPath }),
+      });
+      window.showToast?.('Renombrado exitosamente ✰');
+      loadDir(currentDirectory);
+    };
   } else if (action === 'edit') {
     if (activeSelectedFile.isDirectory) {
-      alert('Solo se pueden editar archivos de texto');
+      window.showToast?.('Solo se pueden editar archivos');
       return;
     }
     openEditor(p);
   } else if (action === 'download') {
     window.location.href = `/api/files/download?path=${encodeURIComponent(p)}`;
   } else if (action === 'delete') {
-    if (confirm(`¿Eliminar definitivamente "${activeSelectedFile.name}"?`)) {
+    document.getElementById('deleteItemPromptText').innerText = `¿Estás seguro de que deseas eliminar permanentemente "${activeSelectedFile.name}"?`;
+    document.getElementById('modalDeleteConfirm').classList.add('active');
+
+    document.getElementById('btnConfirmDelete').onclick = async () => {
+      document.getElementById('modalDeleteConfirm').classList.remove('active');
       await fetch(`/api/files/delete?path=${encodeURIComponent(p)}`, { method: 'DELETE' });
-      window.showToast?.('Elemento eliminado');
+      window.showToast?.('Elemento eliminado ꕤ');
       loadDir(currentDirectory);
-    }
+    };
   }
 };
 
@@ -215,7 +264,7 @@ async function openEditor(filePath) {
   try {
     const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
     const data = await res.json();
-    document.getElementById('modalEditorTitle').innerText = `Editando: ${filePath}`;
+    document.getElementById('modalEditorPath').value = filePath;
     document.getElementById('modalEditorContent').value = data.content || '';
     document.getElementById('modalEditor').classList.add('active');
 
@@ -226,11 +275,11 @@ async function openEditor(filePath) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: filePath, content }),
       });
-      window.showToast?.('Guardado exitosamente');
+      window.showToast?.('Guardado exitosamente ✰');
       document.getElementById('modalEditor').classList.remove('active');
     };
   } catch {
-    alert('No se pudo leer el archivo seleccionado');
+    window.showToast?.('No se pudo leer el archivo seleccionado');
   }
 }
 
@@ -256,39 +305,13 @@ async function handleUpload(files) {
     });
     fill.style.width = '100%';
     label.innerText = 'Subida finalizada con éxito';
-    window.showToast?.('Archivos subidos correctamente');
+    window.showToast?.('Archivos subidos correctamente ꕤ');
     setTimeout(() => bar.classList.remove('active'), 1500);
     loadDir(currentDirectory);
   } catch {
     label.innerText = 'Error al subir';
     setTimeout(() => bar.classList.remove('active'), 2500);
   }
-}
-
-async function createPromptFile() {
-  const name = prompt('Nombre del nuevo archivo (ej. index.js, config.json):');
-  if (!name) return;
-  const full = currentDirectory ? `${currentDirectory}/${name}` : name;
-  await fetch('/api/files/create-file', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: full, content: '' }),
-  });
-  window.showToast?.('Archivo creado');
-  loadDir(currentDirectory);
-}
-
-async function createPromptFolder() {
-  const name = prompt('Nombre de la nueva carpeta:');
-  if (!name) return;
-  const full = currentDirectory ? `${currentDirectory}/${name}` : name;
-  await fetch('/api/files/folder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: full }),
-  });
-  window.showToast?.('Carpeta creada');
-  loadDir(currentDirectory);
 }
 
 window.openGithubModal = function () {
@@ -312,7 +335,7 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
     });
     const d = await res.json();
     if (d.success) {
-      window.showToast?.('Repositorio importado exitosamente como .zip');
+      window.showToast?.('Repositorio importado exitosamente como .zip ✰');
       loadDir(currentDirectory);
     } else {
       alert(`Error de descarga: ${d.error}`);
