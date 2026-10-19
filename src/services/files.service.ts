@@ -176,36 +176,100 @@ export const filesService = {
     const destinationPath = path.join(targetFolder, repo);
     const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
 
-    let cloneUrl = `https://github.com/${owner}/${repo}.git`;
-
-    // Si la carpeta ya existe y tiene .git, simula estilo Pterodactyl (git pull)
-    let folderExists = false;
     try {
-      const stat = await fs.stat(path.join(destinationPath, '.git'));
-      folderExists = stat.isDirectory();
+      await fs.rm(destinationPath, { recursive: true, force: true });
     } catch {}
 
-    if (token && token.trim()) {
-      // Formato Pterodactyl: https://username:token@github.com/owner/repo.git
-      cloneUrl = `https://${encodeURIComponent(owner)}:${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+    let lastError: any = null;
+
+    // Método 1: Git clone público directo
+    try {
+      const publicUrl = `https://github.com/${owner}/${repo}.git`;
+      await execAsync(`git clone --depth 1 ${branchArg} "${publicUrl}" "${destinationPath}"`);
+      return;
+    } catch (err: any) {
+      lastError = err;
     }
 
-    try {
-      if (folderExists) {
-        const pullCmd = `cd "${destinationPath}" && git pull origin ${branch && branch.trim() ? branch.trim() : 'main'}`;
-        await execAsync(pullCmd);
-      } else {
-        const cloneCmd = `git clone --depth 1 ${branchArg} "${cloneUrl}" "${destinationPath}"`;
-        await execAsync(cloneCmd);
+    // Método 2: Git clone con formato usuario:token (Pterodactyl style)
+    if (token && token.trim()) {
+      try {
+        await fs.rm(destinationPath, { recursive: true, force: true });
+      } catch {}
+
+      try {
+        const authUrl = `https://${encodeURIComponent(owner)}:${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+        await execAsync(`git clone --depth 1 ${branchArg} "${authUrl}" "${destinationPath}"`);
+        return;
+      } catch (err: any) {
+        lastError = err;
       }
-    } catch (err: any) {
-      const errText = err.message || '';
-      const sanitized = errText.replace(new RegExp(token || '___', 'g'), '***');
-      if (errText.includes('could not read Username') || errText.includes('Authentication failed') || errText.includes('Repository not found')) {
-        throw new Error('PRIVATE_REPO_AUTH_REQUIRED');
+
+      // Método 3: Git clone con formato solo token@
+      try {
+        await fs.rm(destinationPath, { recursive: true, force: true });
+      } catch {}
+
+      try {
+        const tokenUrl = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+        await execAsync(`git clone --depth 1 ${branchArg} "${tokenUrl}" "${destinationPath}"`);
+        return;
+      } catch (err: any) {
+        lastError = err;
       }
-      throw new Error(sanitized);
     }
+
+    // Método 4: Fallback por API Zipball de GitHub
+    try {
+      await fs.rm(destinationPath, { recursive: true, force: true });
+    } catch {}
+
+    try {
+      const ref = branch && branch.trim() ? branch.trim() : 'main';
+      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${ref}`;
+      const headers: Record<string, string> = {
+        'User-Agent': 'FileLynx-Client',
+        Accept: 'application/vnd.github.v3+json',
+      };
+      if (token && token.trim()) {
+        headers.Authorization = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, { headers });
+      if (response.ok) {
+        await fs.mkdir(destinationPath, { recursive: true });
+        const arrayBuffer = await response.arrayBuffer();
+        const tempZip = path.join(targetFolder, `${repo}_temp.zip`);
+        await fs.writeFile(tempZip, Buffer.from(arrayBuffer));
+
+        try {
+          await execAsync(`unzip -o -q "${tempZip}" -d "${targetFolder}"`);
+        } catch {
+          await execAsync(`python3 -c "import zipfile; zipfile.ZipFile('${tempZip}').extractall('${targetFolder}')"`);
+        }
+
+        const entries = await fs.readdir(targetFolder, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name.startsWith(`${owner}-${repo}-`)) {
+            const extractedPath = path.join(targetFolder, entry.name);
+            await fs.rm(destinationPath, { recursive: true, force: true });
+            await fs.rename(extractedPath, destinationPath);
+            break;
+          }
+        }
+        await fs.rm(tempZip, { force: true });
+        return;
+      }
+    } catch (zipErr: any) {
+      lastError = zipErr;
+    }
+
+    const errText = lastError?.message || '';
+    if (errText.includes('could not read Username') || errText.includes('Authentication failed') || errText.includes('Repository not found')) {
+      throw new Error('PRIVATE_REPO_AUTH_REQUIRED');
+    }
+    const sanitizedMsg = errText.replace(new RegExp(token || '___', 'g'), '***');
+    throw new Error(sanitizedMsg || 'No se pudo clonar el repositorio tras probar múltiples métodos.');
   },
 
   async gitPull(targetFolder: string, repoUrl?: string, token?: string, branch?: string): Promise<string> {
