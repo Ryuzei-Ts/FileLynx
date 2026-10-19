@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+data/*.db
+.git
+.github
+tests
+coverage
