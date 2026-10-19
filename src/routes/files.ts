@@ -76,6 +76,21 @@ router.post('/rename', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+router.post('/move', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { sourcePath, destinationFolder } = req.body;
+    if (!sourcePath || destinationFolder === undefined) {
+      res.status(400).json({ error: 'Ruta de origen y carpeta de destino requeridas' });
+      return;
+    }
+    await filesService.move(sourcePath, destinationFolder);
+    res.json({ success: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Error desconocido';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.delete('/delete', async (req: Request, res: Response): Promise<void> => {
   try {
     const filePath = req.query.path as string;
@@ -133,6 +148,21 @@ router.post('/github-import', async (req: Request, res: Response): Promise<void>
     res.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al importar desde GitHub';
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post('/git-push', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { path: repoPath, message, token, user, repoUrl } = req.body;
+    if (!repoUrl) {
+      res.status(400).json({ error: 'URL remota requerida' });
+      return;
+    }
+    const output = await filesService.gitPushRepo(repoPath || '', message, token, user, repoUrl);
+    res.json({ success: true, output });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Fallo en git push';
     res.status(500).json({ error: message });
   }
 });
