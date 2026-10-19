@@ -1,13 +1,11 @@
 export function renderFTP(container) {
   container.innerHTML = `
-    <h3>Conexión FTP</h3>
-    <div style="display: grid; gap: 8px; max-width: 400px; margin-top: 12px;">
-      <input id="ftpHost" placeholder="Host (ej. ftp.servidor.com)" />
-      <input id="ftpUser" placeholder="Usuario" />
-      <input id="ftpPass" type="password" placeholder="Contraseña" />
-      <input id="ftpPort" placeholder="Puerto" value="21" />
-      <button id="btnFtpConnect">Conectar y listar</button>
+    <div class="panel-box" style="max-width: 500px;">
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 14px;">Cliente FTP</h3>
+      <div class="param-group"><label class="param-label">Host</label><input class="param-input" id="ftpHost" placeholder="ftp.servidor.com" /></div>
+      <div class="param-group"><label class="param-label">Usuario</label><input class="param-input" id="ftpUser" placeholder="ftpuser" /></div>
+      <div class="param-group"><label class="param-label">Contraseña</label><input class="param-input" type="password" id="ftpPass" /></div>
+      <button class="btn-full" id="btnFtpConnect">Conectar</button>
     </div>
-    <div id="ftpResults" style="margin-top: 20px;"></div>
   `;
 }
