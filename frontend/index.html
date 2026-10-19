@@ -41,7 +41,7 @@
           <i class="fas fa-terminal"></i> Terminal
         </div>
         <div class="sidebar-item" id="nav-notebooks" onclick="navigate('notebooks')">
-          <i class="fas fa-book" style="color:var(--text-dark);"></i> Notebooks
+          <i class="fas fa-book"></i> Notebooks
         </div>
         <div class="sidebar-item" id="nav-ftp" onclick="navigate('ftp')">
           <i class="fas fa-network-wired"></i> Cliente FTP
@@ -152,44 +152,41 @@
 
   <div class="modal" id="modalMove">
     <div class="modal-content">
-      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Mover a Otra Carpeta</h3>
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Mover a Otra Ruta</h3>
       <div class="param-group">
         <label class="param-label">Elemento a Mover</label>
-        <input type="text" id="moveSourceInput" class="param-input" readonly style="opacity:0.8;">
+        <input type="text" id="moveSourcePathInput" class="param-input" readonly style="opacity:0.8;">
       </div>
       <div class="param-group">
-        <label class="param-label">Carpeta de Destino (relativa)</label>
-        <input type="text" id="moveDestInput" class="param-input" placeholder="ej. src/utils o dejar vacío para raíz">
+        <label class="param-label">Carpeta de Destino (relativa a raíz)</label>
+        <input type="text" id="moveDestPathInput" class="param-input" placeholder="ej. src, public o déjalo vacío para la raíz">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
         <button class="stat-btn" onclick="closeModal('modalMove')">Cancelar</button>
-        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmMove">Mover Elemento</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmMove">Mover</button>
       </div>
     </div>
   </div>
 
   <div class="modal" id="modalGitPush">
     <div class="modal-content">
-      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;"><i class="fab fa-github"></i> Git Push a Repositorio</h3>
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;"><i class="fab fa-github"></i> Git Push al Repositorio</h3>
       <div class="param-group">
-        <label class="param-label">Carpeta Local del Repositorio</label>
-        <input type="text" id="gitPushPathInput" class="param-input" readonly style="opacity:0.8;">
+        <label class="param-label">URL del Repositorio (usuario/repo)</label>
+        <input type="text" id="pushRepoUrl" class="param-input" placeholder="https://github.com/usuario/repo">
       </div>
       <div class="param-group">
-        <label class="param-label">URL del Repositorio Remoto</label>
-        <input type="text" id="gitPushRepoUrlInput" class="param-input" placeholder="https://github.com/usuario/repo">
+        <label class="param-label">GitHub Personal Access Token</label>
+        <input type="password" id="pushToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
+        <span style="font-size:0.7rem; color:var(--text-gray); display:block; margin-top:4px;">Introduce o actualiza tu token si el anterior expiró.</span>
+      </div>
+      <div class="param-group">
+        <label class="param-label">Rama</label>
+        <input type="text" id="pushBranch" class="param-input" value="main">
       </div>
       <div class="param-group">
         <label class="param-label">Mensaje de Commit</label>
-        <input type="text" id="gitPushMessageInput" class="param-input" value="update from FileLynx">
-      </div>
-      <div class="param-group">
-        <label class="param-label">Usuario GitHub (opcional)</label>
-        <input type="text" id="gitPushUserInput" class="param-input" placeholder="Ryuzei-Ts">
-      </div>
-      <div class="param-group">
-        <label class="param-label">GitHub Token (actualizable si expiró)</label>
-        <input type="password" id="gitPushTokenInput" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
+        <input type="text" id="pushCommitMsg" class="param-input" value="Update from FileLynx">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
         <button class="stat-btn" onclick="closeModal('modalGitPush')">Cancelar</button>
@@ -221,29 +218,12 @@
         <input type="text" id="ghBranch" class="param-input" placeholder="main">
       </div>
       <div class="param-group">
-        <label class="param-label">GitHub Token (guardado localmente si expira)</label>
+        <label class="param-label">GitHub Token (opcional para repositorios privados)</label>
         <input type="password" id="ghToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
         <button class="stat-btn" onclick="closeModal('modalGithub')">Cancelar</button>
         <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmGithub">Descargar a Carpeta Actual</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" id="modalRowActionMenu">
-    <div class="modal-content" style="max-width:320px; padding:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px;">
-        <b id="rowActionFileName" style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Opciones</b>
-        <button class="stat-btn" onclick="closeModal('modalRowActionMenu')" style="padding:2px 8px;">✕</button>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:6px;">
-        <button class="stat-btn" onclick="executeRowAction('rename')"><i class="fas fa-edit"></i> Renombrar</button>
-        <button class="stat-btn" onclick="executeRowAction('move')"><i class="fas fa-arrows-alt"></i> Mover a otra ruta</button>
-        <button class="stat-btn" id="btnRowActionEdit" onclick="executeRowAction('edit')"><i class="fas fa-code"></i> Editar archivo</button>
-        <button class="stat-btn" onclick="executeRowAction('download')"><i class="fas fa-download"></i> Descargar</button>
-        <button class="stat-btn" id="btnRowActionGitPush" onclick="executeRowAction('gitpush')"><i class="fab fa-github"></i> Git Push</button>
-        <button class="stat-btn" onclick="executeRowAction('delete')" style="color:#ef4444;"><i class="fas fa-trash"></i> Eliminar</button>
       </div>
     </div>
   </div>
