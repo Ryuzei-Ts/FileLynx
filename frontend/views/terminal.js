@@ -1,29 +1,95 @@
+let terminalSocket = null;
+
 export function renderTerminal(container) {
   container.innerHTML = `
     <div class="panel-box">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="font-size:1rem; font-weight:800; color:var(--text-dark);"><i class="fas fa-terminal"></i> Terminal VPS (Bash / PTY)</h3>
-        <button class="stat-btn" onclick="document.getElementById('termOutput').textContent=''"><i class="fas fa-eraser"></i> Limpiar</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <h3 style="font-size:1.05rem; font-weight:800; color:var(--text-dark);">Terminal</h3>
+        
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="stat-btn" id="btnTermReconnect" title="Reiniciar sesión WebSocket"><i class="fas fa-sync-alt"></i> Reconectar</button>
+          <button class="stat-btn" id="btnTermClear" title="Limpiar pantalla"><i class="fas fa-eraser"></i> Limpiar</button>
+          <button class="stat-btn" id="btnTermSigint" style="color:#ef4444;" title="Enviar Ctrl+C"><i class="fas fa-stop"></i> Ctrl+C</button>
+          <button class="stat-btn" onclick="sendQuickCommand('pm2 status\\n')">pm2 status</button>
+          <button class="stat-btn" onclick="sendQuickCommand('git status\\n')">git status</button>
+        </div>
       </div>
-      <div class="terminal-box" id="termOutput">Conectando sesión PTY...\n</div>
-      <input type="text" id="termInput" class="param-input" placeholder="Comando bash..." style="margin-top:12px; font-family:'JetBrains Mono', monospace;"/>
+
+      <div class="terminal-box" id="termOutput">Iniciando sesión PTY...\n</div>
+      
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input type="text" id="termInput" class="param-input" placeholder="Escribe un comando bash y presiona Enter..." style="font-family:'JetBrains Mono', monospace; flex:1;"/>
+        <button class="stat-btn" id="btnSendCmd" style="background:var(--primary); color:#fff; border-color:var(--primary); padding:0 18px;">Enviar</button>
+      </div>
     </div>
   `;
 
   const output = document.getElementById('termOutput');
   const input = document.getElementById('termInput');
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
+  const btnSend = document.getElementById('btnSendCmd');
 
-  socket.onmessage = (event) => {
-    output.textContent += event.data;
-    output.scrollTop = output.scrollHeight;
+  function connectSocket() {
+    if (terminalSocket) {
+      try {
+        terminalSocket.close();
+      } catch {}
+    }
+
+    output.textContent = 'Conectando con WebSocket en VPS...\n';
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    terminalSocket = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
+
+    terminalSocket.onopen = () => {
+      output.textContent += '[Conexión establecida]\n';
+    };
+
+    terminalSocket.onmessage = (event) => {
+      output.textContent += event.data;
+      output.scrollTop = output.scrollHeight;
+    };
+
+    terminalSocket.onclose = () => {
+      output.textContent += '\n[Sesión terminada]';
+    };
+
+    terminalSocket.onerror = () => {
+      output.textContent += '\n[Error en la conexión WebSocket]';
+    };
+  }
+
+  function sendCommand() {
+    if (!terminalSocket || terminalSocket.readyState !== WebSocket.OPEN) {
+      alert('La terminal no está conectada');
+      return;
+    }
+    terminalSocket.send(input.value + '\n');
+    input.value = '';
+  }
+
+  window.sendQuickCommand = function (cmd) {
+    if (terminalSocket && terminalSocket.readyState === WebSocket.OPEN) {
+      terminalSocket.send(cmd);
+    }
   };
 
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      socket.send(input.value + '\n');
-      input.value = '';
-    }
+    if (e.key === 'Enter') sendCommand();
   });
+  btnSend.onclick = sendCommand;
+
+  document.getElementById('btnTermClear').onclick = () => {
+    output.textContent = '';
+  };
+
+  document.getElementById('btnTermReconnect').onclick = () => {
+    connectSocket();
+  };
+
+  document.getElementById('btnTermSigint').onclick = () => {
+    if (terminalSocket && terminalSocket.readyState === WebSocket.OPEN) {
+      terminalSocket.send('\x03');
+    }
+  };
+
+  connectSocket();
 }
