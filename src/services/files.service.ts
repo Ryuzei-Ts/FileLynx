@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolveSafePath } from '#utils/paths';
@@ -10,14 +9,25 @@ import type { FileEntry } from '#types';
 const execAsync = promisify(exec);
 
 export const filesService = {
-  async list(relativeDirectory: string = ''): Promise<FileEntry[]> {
+  async list(relativeDirectory: string = ''): Promise<(FileEntry & { hasGit?: boolean })[]> {
     const targetDir = resolveSafePath(relativeDirectory);
     const dirents = await fs.readdir(targetDir, { withFileTypes: true });
 
-    const entries: FileEntry[] = await Promise.all(
+    const entries = await Promise.all(
       dirents.map(async (entry) => {
         const fullPath = path.join(targetDir, entry.name);
         const stats = await fs.stat(fullPath);
+        let hasGit = false;
+
+        if (entry.isDirectory()) {
+          try {
+            await fs.access(path.join(fullPath, '.git'));
+            hasGit = true;
+          } catch {
+            hasGit = false;
+          }
+        }
+
         return {
           name: entry.name,
           path: path.posix.join(relativeDirectory, entry.name),
@@ -25,6 +35,7 @@ export const filesService = {
           isDirectory: entry.isDirectory(),
           modifiedAt: stats.mtime,
           extension: entry.isDirectory() ? undefined : path.extname(entry.name).toLowerCase(),
+          hasGit,
         };
       })
     );
@@ -77,49 +88,46 @@ export const filesService = {
   },
 
   async importFromGitHub(repoUrl: string, targetSubPath: string, token?: string, branch?: string): Promise<void> {
-    const cleanRepo = repoUrl.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').trim();
-    const [owner, repo] = cleanRepo.split('/');
-    if (!owner || !repo) throw new Error('Formato de repositorio inválido. Use usuario/repositorio');
-
-    const ref = branch || 'main';
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${ref}`;
-    const headers: Record<string, string> = {
-      'User-Agent': 'FileLynx-Client',
-      Accept: 'application/vnd.github.v3+json',
-    };
-    if (token && token.trim()) {
-      headers.Authorization = `Bearer ${token.trim()}`;
-    }
-
-    const response = await fetch(apiUrl, { headers });
-    if (!response.ok) {
-      const fallbackUrl = `https://api.github.com/repos/${owner}/${repo}/zipball`;
-      const fallbackRes = await fetch(fallbackUrl, { headers });
-      if (!fallbackRes.ok) {
-        throw new Error(`Error de GitHub API (${fallbackRes.status}): ${fallbackRes.statusText}`);
-      }
-      return this.saveZipBuffer(fallbackRes, targetSubPath, repo);
-    }
-
-    return this.saveZipBuffer(response, targetSubPath, repo);
-  },
-
-  async saveZipBuffer(res: Response, targetSubPath: string, repoName: string): Promise<void> {
     const targetFolder = resolveSafePath(targetSubPath);
     await fs.mkdir(targetFolder, { recursive: true });
-    const zipPath = path.join(targetFolder, `${repoName}.zip`);
 
-    if (!res.body) throw new Error('Cuerpo de respuesta vacío desde GitHub');
-    // @ts-ignore
-    await pipeline(res.body, createWriteStream(zipPath));
+    let cleanRepo = repoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    cleanRepo = cleanRepo.replace(/^github\.com\//, '').replace(/\.git$/, '');
+
+    const [owner, repo] = cleanRepo.split('/');
+    if (!owner || !repo) {
+      throw new Error('Formato de repositorio inválido. Debe ser: usuario/repositorio');
+    }
+
+    const cloneUrl = token && token.trim()
+      ? `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`
+      : `https://github.com/${owner}/${repo}.git`;
+
+    const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
+    const destinationPath = path.join(targetFolder, repo);
+
+    const cmd = `git clone --depth 1 ${branchArg} "${cloneUrl}" "${destinationPath}"`;
+    try {
+      await execAsync(cmd);
+    } catch (err: any) {
+      const sanitizedMsg = (err.message || '').replace(new RegExp(token || '___', 'g'), '***');
+      throw new Error(sanitizedMsg);
+    }
   },
 
   async gitPush(targetFolder: string, repoUrl: string, token: string, commitMsg: string = 'Update from FileLynx', branch: string = 'main'): Promise<string> {
     const safeDir = resolveSafePath(targetFolder);
-    const cleanRepo = repoUrl.replace(/^https?:\/\/([^@]+@)?github\.com\//, '').replace(/\.git$/, '').trim();
-    const authRemote = `https://${token ? token + '@' : ''}github.com/${cleanRepo}.git`;
+    let cleanRepo = repoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    cleanRepo = cleanRepo.replace(/^github\.com\//, '').replace(/\.git$/, '');
 
-    const cmd = `cd "${safeDir}" && git init && git config user.name "FileLynx" && git config user.email "filelynx@local" && git remote remove origin 2>/dev/null || true && git remote add origin "${authRemote}" && git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true && git branch -M "${branch}" && git push -u origin "${branch}" --force`;
+    const [owner, repo] = cleanRepo.split('/');
+    if (!owner || !repo) {
+      throw new Error('URL de repositorio inválida');
+    }
+
+    const authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
+    const cmd = `cd "${safeDir}" && git config user.name "FileLynx" && git config user.email "filelynx@local" && git remote remove origin 2>/dev/null || true && git remote add origin "${authRemote}" && git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true && git branch -M "${branch}" && git push -u origin "${branch}" --force`;
+    
     const { stdout, stderr } = await execAsync(cmd);
     return stdout || stderr;
   },
