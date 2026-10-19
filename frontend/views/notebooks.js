@@ -8,9 +8,11 @@ export async function renderNotebooks(container) {
   container.innerHTML = `
     <div class="panel-box" id="notesListContainer">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-        <h3 style="font-size:1.3rem; font-weight:800;"><i class="fas fa-sticky-note" style="color:var(--price-color);"></i> Notas</h3>
+        <h3 style="font-size:1.3rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+          <i class="fas fa-sticky-note" style="color:#000000;"></i> Notebooks
+        </h3>
         <button class="btn-full" style="width:auto; padding:8px 16px;" id="btnCreateNewNote">
-          <i class="fas fa-pen"></i> Nueva Nota
+          <i class="fas fa-plus"></i> Nueva Nota
         </button>
       </div>
 
@@ -24,11 +26,9 @@ export async function renderNotebooks(container) {
       </div>
     </div>
 
-    <!-- Vista de edición de nota (iPhone style) -->
     <div class="note-editor-view" id="noteEditorContainer" style="display:none;">
       <div class="note-editor-header">
-        <button class="stat-btn" id="btnBackToNotes"><i class="fas fa-chevron-left"></i> Notas</button>
-        <span style="font-size:0.75rem; color:var(--text-gray); font-weight:700;" id="noteWordCount">0 palabras</span>
+        <button class="stat-btn" id="btnBackToNotes"><i class="fas fa-chevron-left"></i> Volver</button>
         <div style="display:flex; gap:6px;">
           <button class="stat-btn" id="btnDeleteCurrentNote" style="color:#ef4444;"><i class="fas fa-trash"></i></button>
           <button class="btn-full" style="width:auto; padding:8px 18px;" id="btnSaveCurrentNote">Guardar</button>
@@ -56,8 +56,6 @@ export async function renderNotebooks(container) {
     filterNotes(e.target.value);
   };
 
-  document.getElementById('editNoteContent').oninput = updateWordCount;
-
   loadNotes();
 }
 
@@ -78,7 +76,7 @@ function renderNotesList(list) {
   wrapper.innerHTML = '';
 
   if (list.length === 0) {
-    wrapper.innerHTML = '<p style="padding:24px; color:var(--text-gray); text-align:center;">No hay notas creadas. Pulsa "Nueva Nota" para comenzar.</p>';
+    wrapper.innerHTML = '<p style="padding:24px; color:var(--text-gray); text-align:center;">No hay notas creadas. Pulsa "Nueva Nota" para crear una.</p>';
     return;
   }
 
@@ -137,14 +135,7 @@ function openNoteEditor(note) {
   }
 
   document.getElementById('editNoteContent').value = body;
-  updateWordCount();
-}
-
-function updateWordCount() {
-  const text = document.getElementById('editNoteContent').value.trim();
-  const words = text ? text.split(/\s+/).length : 0;
-  const chars = text.length;
-  document.getElementById('noteWordCount').innerText = `${words} palabras, ${chars} caracteres`;
+  document.getElementById('editNoteTitle').focus();
 }
 
 async function saveActiveNote() {
