@@ -18,52 +18,6 @@
       <span class="api-name-top" onclick="navigate('files')">FileLynx ✰</span>
     </div>
     <div class="topbar-right">
-      <button id="fileContextTrigger" onclick="toggleFileContextMenu()">
-        <i class="fas fa-ellipsis-v"></i> Opciones de Selección
-      </button>
-
-      <div class="card-context-menu" id="fileContextMenu">
-        <ul class="list">
-          <li class="element" onclick="triggerFileAction('rename')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path>
-              <path d="m15 5 4 4"></path>
-            </svg>
-            <p class="label">Renombrar</p>
-          </li>
-          <li class="element" onclick="triggerFileAction('edit')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"></path>
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-            </svg>
-            <p class="label">Editar archivo</p>
-          </li>
-          <li class="element" onclick="triggerFileAction('download')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <p class="label">Descargar</p>
-          </li>
-        </ul>
-        <div class="separator"></div>
-        <ul class="list">
-          <li class="element delete" onclick="triggerFileAction('delete')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18"></path>
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-            </svg>
-            <p class="label">Eliminar</p>
-          </li>
-        </ul>
-      </div>
-
-      <div class="menu-toggle" onclick="toggleTheme()" title="Modo Oscuro / Claro">
-        <i class="fas fa-moon" id="theme-icon"></i>
-      </div>
-
       <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" class="menu-toggle" style="text-decoration:none;" title="Ver en GitHub">
         <i class="fab fa-github" style="font-size:1.2rem; color:var(--text-dark);"></i>
       </a>
@@ -87,7 +41,7 @@
           <i class="fas fa-terminal"></i> Terminal
         </div>
         <div class="sidebar-item" id="nav-notebooks" onclick="navigate('notebooks')">
-          <i class="fas fa-book"></i> Notebooks
+          <i class="fas fa-book" style="color:var(--text-dark);"></i> Notebooks
         </div>
         <div class="sidebar-item" id="nav-ftp" onclick="navigate('ftp')">
           <i class="fas fa-network-wired"></i> Cliente FTP
@@ -196,6 +150,54 @@
     </div>
   </div>
 
+  <div class="modal" id="modalMove">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Mover a Otra Carpeta</h3>
+      <div class="param-group">
+        <label class="param-label">Elemento a Mover</label>
+        <input type="text" id="moveSourceInput" class="param-input" readonly style="opacity:0.8;">
+      </div>
+      <div class="param-group">
+        <label class="param-label">Carpeta de Destino (relativa)</label>
+        <input type="text" id="moveDestInput" class="param-input" placeholder="ej. src/utils o dejar vacío para raíz">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalMove')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmMove">Mover Elemento</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalGitPush">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;"><i class="fab fa-github"></i> Git Push a Repositorio</h3>
+      <div class="param-group">
+        <label class="param-label">Carpeta Local del Repositorio</label>
+        <input type="text" id="gitPushPathInput" class="param-input" readonly style="opacity:0.8;">
+      </div>
+      <div class="param-group">
+        <label class="param-label">URL del Repositorio Remoto</label>
+        <input type="text" id="gitPushRepoUrlInput" class="param-input" placeholder="https://github.com/usuario/repo">
+      </div>
+      <div class="param-group">
+        <label class="param-label">Mensaje de Commit</label>
+        <input type="text" id="gitPushMessageInput" class="param-input" value="update from FileLynx">
+      </div>
+      <div class="param-group">
+        <label class="param-label">Usuario GitHub (opcional)</label>
+        <input type="text" id="gitPushUserInput" class="param-input" placeholder="Ryuzei-Ts">
+      </div>
+      <div class="param-group">
+        <label class="param-label">GitHub Token (actualizable si expiró)</label>
+        <input type="password" id="gitPushTokenInput" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalGitPush')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmGitPush">Hacer Push</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="modalDeleteConfirm">
     <div class="modal-content">
       <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px; color:#ef4444;">Eliminar Elemento</h3>
@@ -219,12 +221,29 @@
         <input type="text" id="ghBranch" class="param-input" placeholder="main">
       </div>
       <div class="param-group">
-        <label class="param-label">GitHub Token (opcional para repositorios privados)</label>
+        <label class="param-label">GitHub Token (guardado localmente si expira)</label>
         <input type="password" id="ghToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
         <button class="stat-btn" onclick="closeModal('modalGithub')">Cancelar</button>
         <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmGithub">Descargar a Carpeta Actual</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalRowActionMenu">
+    <div class="modal-content" style="max-width:320px; padding:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px;">
+        <b id="rowActionFileName" style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Opciones</b>
+        <button class="stat-btn" onclick="closeModal('modalRowActionMenu')" style="padding:2px 8px;">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <button class="stat-btn" onclick="executeRowAction('rename')"><i class="fas fa-edit"></i> Renombrar</button>
+        <button class="stat-btn" onclick="executeRowAction('move')"><i class="fas fa-arrows-alt"></i> Mover a otra ruta</button>
+        <button class="stat-btn" id="btnRowActionEdit" onclick="executeRowAction('edit')"><i class="fas fa-code"></i> Editar archivo</button>
+        <button class="stat-btn" onclick="executeRowAction('download')"><i class="fas fa-download"></i> Descargar</button>
+        <button class="stat-btn" id="btnRowActionGitPush" onclick="executeRowAction('gitpush')"><i class="fab fa-github"></i> Git Push</button>
+        <button class="stat-btn" onclick="executeRowAction('delete')" style="color:#ef4444;"><i class="fas fa-trash"></i> Eliminar</button>
       </div>
     </div>
   </div>
