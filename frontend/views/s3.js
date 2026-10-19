@@ -1,13 +1,12 @@
 export function renderS3(container) {
   container.innerHTML = `
-    <h3>Explorador AWS S3</h3>
-    <div style="display: grid; gap: 8px; max-width: 400px; margin-top: 12px;">
-      <input id="s3Bucket" placeholder="Nombre del bucket" />
-      <input id="s3Region" placeholder="Región (ej. us-east-1)" value="us-east-1" />
-      <input id="s3Key" placeholder="Access Key ID" />
-      <input id="s3Secret" type="password" placeholder="Secret Access Key" />
-      <button id="btnS3List">Listar Objetos</button>
+    <div class="panel-box" style="max-width: 500px;">
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 14px;">Explorador AWS S3</h3>
+      <div class="param-group"><label class="param-label">Bucket</label><input class="param-input" id="s3Bucket" /></div>
+      <div class="param-group"><label class="param-label">Región</label><input class="param-input" id="s3Region" value="us-east-1" /></div>
+      <div class="param-group"><label class="param-label">Access Key ID</label><input class="param-input" id="s3Key" /></div>
+      <div class="param-group"><label class="param-label">Secret Access Key</label><input class="param-input" type="password" id="s3Secret" /></div>
+      <button class="btn-full" id="btnS3List">Listar Objetos</button>
     </div>
-    <div id="s3Results" style="margin-top: 20px;"></div>
   `;
 }
