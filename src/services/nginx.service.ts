@@ -74,9 +74,12 @@ export const nginxService = {
     await fs.mkdir(availableDir, { recursive: true });
     await fs.mkdir(enabledDir, { recursive: true });
 
+    const isSubdomain = cleanDomain.split('.').length > 2;
+    const serverNames = isSubdomain ? cleanDomain : `${cleanDomain} www.${cleanDomain}`;
+
     const configContent = `server {
     listen 80;
-    server_name ${cleanDomain} www.${cleanDomain};
+    server_name ${serverNames};
 
     location / {
         proxy_pass http://127.0.0.1:${targetPort};
@@ -109,7 +112,10 @@ export const nginxService = {
     const cleanDomain = domain.trim().toLowerCase();
     const cleanEmail = email && email.trim() ? email.trim() : 'admin@' + cleanDomain;
 
-    const cmd = `certbot --nginx -d ${cleanDomain} -d www.${cleanDomain} --non-interactive --agree-tos -m ${cleanEmail} --redirect`;
+    const isSubdomain = cleanDomain.split('.').length > 2;
+    const domainFlags = isSubdomain ? `-d ${cleanDomain}` : `-d ${cleanDomain} -d www.${cleanDomain}`;
+
+    const cmd = `certbot --nginx ${domainFlags} --non-interactive --agree-tos -m ${cleanEmail} --redirect`;
     const { stdout, stderr } = await execAsync(cmd);
     await execAsync('systemctl reload nginx');
     return stdout || stderr;
