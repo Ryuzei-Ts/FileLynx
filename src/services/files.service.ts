@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolveSafePath } from '#utils/paths';
 import type { FileEntry } from '#types';
@@ -158,7 +158,8 @@ export const filesService = {
     }
   },
 
-  async importFromGitHub(repoUrl: string, targetSubPath: string, token?: string, branch?: string): Promise<void> {
+  // Simulación de terminal interactiva nativa tipo Pterodactyl para git clone con streams
+  async importFromGitHubInteractive(repoUrl: string, targetSubPath: string, username: string, token: string, branch?: string, onLog?: (data: string) => void): Promise<void> {
     const targetFolder = resolveSafePath(targetSubPath);
     await fs.mkdir(targetFolder, { recursive: true });
 
@@ -175,101 +176,52 @@ export const filesService = {
 
     const destinationPath = path.join(targetFolder, repo);
     const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
+    const publicUrl = `https://github.com/${owner}/${repo}.git`;
 
     try {
       await fs.rm(destinationPath, { recursive: true, force: true });
     } catch {}
 
-    let lastError: any = null;
+    return new Promise((resolve, reject) => {
+      const child = spawn('git', ['clone', '--depth', '1', ...(branchArg ? branchArg.split(' ') : []), publicUrl, destinationPath], {
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '1' },
+      });
 
-    // Método 1: Git clone público directo
-    try {
-      const publicUrl = `https://github.com/${owner}/${repo}.git`;
-      await execAsync(`git clone --depth 1 ${branchArg} "${publicUrl}" "${destinationPath}"`);
-      return;
-    } catch (err: any) {
-      lastError = err;
-    }
+      let sentUsername = false;
+      let sentPassword = false;
 
-    // Método 2: Git clone con formato usuario:token (Pterodactyl style)
-    if (token && token.trim()) {
-      try {
-        await fs.rm(destinationPath, { recursive: true, force: true });
-      } catch {}
+      child.stdout.on('data', (data) => {
+        const str = data.toString();
+        onLog?.(str);
+      });
 
-      try {
-        const authUrl = `https://${encodeURIComponent(owner)}:${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
-        await execAsync(`git clone --depth 1 ${branchArg} "${authUrl}" "${destinationPath}"`);
-        return;
-      } catch (err: any) {
-        lastError = err;
-      }
+      child.stderr.on('data', (data) => {
+        const str = data.toString();
+        onLog?.(str);
 
-      // Método 3: Git clone con formato solo token@
-      try {
-        await fs.rm(destinationPath, { recursive: true, force: true });
-      } catch {}
-
-      try {
-        const tokenUrl = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
-        await execAsync(`git clone --depth 1 ${branchArg} "${tokenUrl}" "${destinationPath}"`);
-        return;
-      } catch (err: any) {
-        lastError = err;
-      }
-    }
-
-    // Método 4: Fallback por API Zipball de GitHub
-    try {
-      await fs.rm(destinationPath, { recursive: true, force: true });
-    } catch {}
-
-    try {
-      const ref = branch && branch.trim() ? branch.trim() : 'main';
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${ref}`;
-      const headers: Record<string, string> = {
-        'User-Agent': 'FileLynx-Client',
-        Accept: 'application/vnd.github.v3+json',
-      };
-      if (token && token.trim()) {
-        headers.Authorization = `Bearer ${token.trim()}`;
-      }
-
-      const response = await fetch(apiUrl, { headers });
-      if (response.ok) {
-        await fs.mkdir(destinationPath, { recursive: true });
-        const arrayBuffer = await response.arrayBuffer();
-        const tempZip = path.join(targetFolder, `${repo}_temp.zip`);
-        await fs.writeFile(tempZip, Buffer.from(arrayBuffer));
-
-        try {
-          await execAsync(`unzip -o -q "${tempZip}" -d "${targetFolder}"`);
-        } catch {
-          await execAsync(`python3 -c "import zipfile; zipfile.ZipFile('${tempZip}').extractall('${targetFolder}')"`);
+        if ((str.includes('Username for') || str.includes('Username:')) && !sentUsername && username) {
+          child.stdin.write(username + '\n');
+          sentUsername = true;
+          onLog?.(`[Enviando Username: ${username}]\n`);
+        } else if ((str.includes('Password for') || str.includes('Password:')) && !sentPassword && token) {
+          child.stdin.write(token + '\n');
+          sentPassword = true;
+          onLog?.(`[Enviando Password / Token]\n`);
         }
+      });
 
-        const entries = await fs.readdir(targetFolder, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.isDirectory() && entry.name.startsWith(`${owner}-${repo}-`)) {
-            const extractedPath = path.join(targetFolder, entry.name);
-            await fs.rm(destinationPath, { recursive: true, force: true });
-            await fs.rename(extractedPath, destinationPath);
-            break;
-          }
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Git clone finalizó con código de error ${code}`));
         }
-        await fs.rm(tempZip, { force: true });
-        return;
-      }
-    } catch (zipErr: any) {
-      lastError = zipErr;
-    }
+      });
 
-    const errText = lastError?.message || '';
-    if (errText.includes('could not read Username') || errText.includes('Authentication failed') || errText.includes('Repository not found')) {
-      throw new Error('PRIVATE_REPO_AUTH_REQUIRED');
-    }
-    const sanitizedMsg = errText.replace(new RegExp(token || '___', 'g'), '***');
-    throw new Error(sanitizedMsg || 'No se pudo clonar el repositorio tras probar múltiples métodos.');
+      child.on('error', (err) => {
+        reject(err);
+      });
+    });
   },
 
   async gitPull(targetFolder: string, repoUrl?: string, token?: string, branch?: string): Promise<string> {
