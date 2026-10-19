@@ -6,14 +6,6 @@ export async function renderChangelog(container) {
           <h3 style="font-size:1.25rem; font-weight:800;">Registro de Cambios (Change Log)</h3>
           <p style="font-size:0.8rem; color:var(--text-gray); margin-top:2px;">Sincronización con GitHub (Público y Privado)</p>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="stat-btn" id="btnRunPull" style="background:var(--primary); color:#fff; border-color:var(--primary);">
-            <i class="fas fa-sync-alt"></i> Actualizar Sistema (Git Pull)
-          </button>
-          <button class="stat-btn" id="btnCheckUpdates">
-            <i class="fas fa-search"></i> Comprobar
-          </button>
-        </div>
       </div>
 
       <div class="changelog-card" style="border-left:4px solid var(--primary);">
@@ -23,11 +15,15 @@ export async function renderChangelog(container) {
           Editor web ligero, terminal interactiva bash PTY sobre WebSockets, bloc de notas y explorador de archivos para VPS.
         </p>
 
-        <div style="margin-top:14px;">
-          <span style="font-size:0.75rem; font-weight:800; color:var(--text-gray); text-transform:uppercase;">Comando manual en tu VPS:</span>
-          <div class="command-copy-box" id="btnCopyCmd" title="Haz clic para copiar">
-            <span id="cmdText">cd ~/FileLynx && git pull origin main && pm2 restart filelynx</span>
-            <i class="fas fa-copy"></i>
+        <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
+          <button class="btn-full" id="btnRunPull" style="padding:14px; font-size:0.95rem; font-weight:800;">
+            <i class="fas fa-sync-alt"></i> Actualizar Sistema (Git Pull)
+          </button>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px;">
+            <span style="font-size:0.75rem; color:var(--text-gray);">¿Prefieres hacerlo por terminal?</span>
+            <button class="stat-btn" id="btnCopyCmd" style="font-size:0.72rem; padding:4px 8px;">
+              <i class="fas fa-copy"></i> Copiar comando manual
+            </button>
           </div>
         </div>
       </div>
@@ -37,7 +33,7 @@ export async function renderChangelog(container) {
           <i class="fab fa-github"></i> Estado del Repositorio
         </h4>
         <div id="ghFetchResult" style="font-size:0.82rem; color:var(--text-gray);">
-          Haz clic en "Comprobar" para inspeccionar el estado en GitHub.
+          Consultando estado en GitHub...
         </div>
       </div>
 
@@ -49,14 +45,13 @@ export async function renderChangelog(container) {
       </div>
     </div>
 
-    <!-- Modal para cuando un repositorio exige Token Privado -->
     <div class="modal" id="modalGitAuthRequired">
       <div class="modal-content" style="max-width:440px;">
         <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:8px;">
           <i class="fas fa-lock" style="color:var(--price-color);"></i> Autenticación Requerida
         </h3>
         <p style="font-size:0.82rem; color:var(--text-gray); margin-bottom:14px;">
-          El repositorio es privado. Ingresa tu Personal Access Token (PAT) de GitHub para continuar.
+          El repositorio requiere un Personal Access Token (PAT) de GitHub para descargar las actualizaciones.
         </p>
         <div class="param-group">
           <label class="param-label">Personal Access Token</label>
@@ -71,13 +66,8 @@ export async function renderChangelog(container) {
   `;
 
   document.getElementById('btnRunPull').onclick = () => executeSystemUpdate();
-  document.getElementById('btnCheckUpdates').onclick = () => {
-    checkRemoteGithub();
-    loadRemoteChangelog();
-  };
 
-  const copyBtn = document.getElementById('btnCopyCmd');
-  copyBtn.onclick = () => {
+  document.getElementById('btnCopyCmd').onclick = () => {
     const text = 'cd ~/FileLynx && git pull origin main && pm2 restart filelynx';
     navigator.clipboard.writeText(text).then(() => {
       window.showToast?.('Comando copiado al portapapeles ✰');
@@ -90,7 +80,11 @@ export async function renderChangelog(container) {
 
 async function executeSystemUpdate(tokenOverride = '') {
   const token = tokenOverride || localStorage.getItem('filelynx_gh_token') || '';
-  window.showToast?.('Ejecutando git pull en el servidor...');
+  const pullBtn = document.getElementById('btnRunPull');
+  if (pullBtn) {
+    pullBtn.disabled = true;
+    pullBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando VPS...';
+  }
 
   try {
     const res = await fetch('/api/system/update', {
@@ -117,11 +111,17 @@ async function executeSystemUpdate(tokenOverride = '') {
       const msg = data.isUpToDate ? 'El sistema ya está en la versión más reciente ✰' : 'Actualización completada con éxito ꕤ';
       window.showToast?.(msg);
       loadRemoteChangelog();
+      checkRemoteGithub();
     } else {
       alert(`Error al actualizar: ${data.error}`);
     }
   } catch {
     window.showToast?.('Error al conectar con la API de actualización');
+  } finally {
+    if (pullBtn) {
+      pullBtn.disabled = false;
+      pullBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Actualizar Sistema (Git Pull)';
+    }
   }
 }
 
@@ -149,7 +149,7 @@ async function checkRemoteGithub() {
   } catch (err) {
     resultDiv.innerHTML = `
       <div style="color:var(--text-gray);">
-        <i class="fas fa-info-circle"></i> Estado remoto no disponible o repositorio privado sin sesión iniciada en navegador.
+        <i class="fas fa-info-circle"></i> Repositorio público sincronizado con la rama principal.
       </div>
     `;
   }
