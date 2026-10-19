@@ -86,6 +86,17 @@
     <div id="view-container"></div>
   </main>
 
+  <div class="modal" id="modalAppAlert">
+    <div class="modal-content" style="max-width:420px; text-align:center;">
+      <div id="modalAlertIcon" style="font-size:2rem; margin-bottom:10px; color:var(--primary);">
+        <i class="fas fa-info-circle"></i>
+      </div>
+      <h3 id="modalAlertTitle" style="font-size:1.1rem; font-weight:800; margin-bottom:8px;">Aviso</h3>
+      <p id="modalAlertMessage" style="font-size:0.84rem; color:var(--text-gray); line-height:1.5; margin-bottom:16px; word-break:break-word;"></p>
+      <button class="btn-full" onclick="closeModal('modalAppAlert')">Entendido</button>
+    </div>
+  </div>
+
   <div class="modal" id="modalEditor">
     <div class="modal-content" style="max-width:800px;">
       <h3 id="modalEditorTitle" style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Editar Archivo</h3>
@@ -159,7 +170,7 @@
       </div>
       <div class="param-group">
         <label class="param-label">Carpeta de Destino (relativa a raíz)</label>
-        <input type="text" id="moveDestPathInput" class="param-input" placeholder="ej. src, public o déjalo vacío para la raíz">
+        <input type="text" id="moveDestPathInput" class="param-input" placeholder="ej. src, public o vacío para raíz">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
         <button class="stat-btn" onclick="closeModal('modalMove')">Cancelar</button>
@@ -218,7 +229,7 @@
         <input type="text" id="ghBranch" class="param-input" placeholder="main">
       </div>
       <div class="param-group">
-        <label class="param-label">GitHub Token (opcional para repositorios privados)</label>
+        <label class="param-label">GitHub Token (opcional para privados)</label>
         <input type="password" id="ghToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
