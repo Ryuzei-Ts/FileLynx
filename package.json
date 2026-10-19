@@ -19,7 +19,7 @@
     "filebrowser",
     "file-manager",
     "editor",
-    "codemirror",
+    "monaco-editor",
     "terminal",
     "xterm",
     "notebooks",
@@ -27,8 +27,6 @@
     "s3",
     "vps",
     "self-hosted",
-    "web-ide",
-    "nodejs",
     "typescript",
     "express"
   ],
@@ -38,6 +36,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "user:create": "tsx src/cli/create-user.ts",
+    "reset-password": "tsx src/cli/reset-password.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
