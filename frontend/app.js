@@ -4,6 +4,7 @@ import { renderNotebooks } from './views/notebooks.js';
 import { renderFTP } from './views/ftp.js';
 import { renderS3 } from './views/s3.js';
 import { renderChangelog } from './views/changelog.js';
+import { renderDomains } from './views/domains.js';
 
 const container = document.getElementById('view-container');
 let currentUser = null;
@@ -11,6 +12,7 @@ let currentUser = null;
 const views = {
   files: renderFiles,
   terminal: renderTerminal,
+  domains: renderDomains,
   notebooks: renderNotebooks,
   ftp: renderFTP,
   s3: renderS3,
