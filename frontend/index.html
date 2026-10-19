@@ -12,19 +12,16 @@
 </head>
 <body>
 
-  <!-- Topbar -->
   <header class="topbar" id="mainTopbar" style="display:none;">
     <div class="topbar-left">
       <div class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></div>
       <span class="api-name-top" onclick="navigate('files')">FileLynx ✰</span>
     </div>
     <div class="topbar-right">
-      <!-- Botón Contextual que aparece solo al seleccionar un archivo -->
       <button id="fileContextTrigger" onclick="toggleFileContextMenu()">
         <i class="fas fa-ellipsis-v"></i> Opciones de Selección
       </button>
 
-      <!-- Menú Nazar-Gavrylyk en tema claro -->
       <div class="card-context-menu" id="fileContextMenu">
         <ul class="list">
           <li class="element" onclick="triggerFileAction('rename')">
@@ -63,7 +60,6 @@
         </ul>
       </div>
 
-      <!-- Icono de GitHub hacia tu perfil -->
       <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" class="menu-toggle" style="text-decoration:none;" title="Ver en GitHub">
         <i class="fab fa-github" style="font-size:1.2rem; color:var(--text-dark);"></i>
       </a>
@@ -72,11 +68,10 @@
 
   <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
-  <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div>
       <div class="user-badge-sidebar">
-        <span>VPS Conectada</span>
+        <span>Conectado como:</span>
         <b id="uEmail">admin</b>
       </div>
       <div class="sidebar-section">
@@ -105,7 +100,6 @@
     </div>
   </aside>
 
-  <!-- Login (sin register) -->
   <div id="view-auth" class="auth-container-wrapper">
     <div class="auth-card-large">
       <div style="text-align:center; margin-bottom:20px;">
@@ -127,27 +121,103 @@
     </div>
   </div>
 
-  <!-- Main View -->
   <main class="main-content" id="panelMainContent" style="display:none;">
     <div id="view-container"></div>
   </main>
 
-  <!-- Modal Editor de Archivo -->
   <div class="modal" id="modalEditor">
     <div class="modal-content" style="max-width:800px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 id="modalEditorTitle" style="font-size:1rem; font-weight:800;">Editar Archivo</h3>
-        <button class="stat-btn" onclick="closeModal('modalEditor')">✕</button>
+      <h3 id="modalEditorTitle" style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Editar Archivo</h3>
+      <div class="param-group">
+        <label class="param-label">Ruta del Archivo</label>
+        <input type="text" id="modalEditorPath" class="param-input" readonly style="opacity:0.8;">
       </div>
-      <textarea id="modalEditorContent" class="param-input" style="height:420px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; resize:vertical;"></textarea>
-      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+      <div class="param-group">
+        <label class="param-label">Contenido</label>
+        <textarea id="modalEditorContent" class="param-input" style="height:360px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
         <button class="stat-btn" onclick="closeModal('modalEditor')">Cancelar</button>
-        <button class="btn-full" style="width:auto; padding:10px 20px;" id="btnSaveEditor">Guardar Cambios</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnSaveEditor">Guardar Cambios</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal GitHub Import -->
+  <div class="modal" id="modalNewNotebook">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Crear Nuevo Notebook</h3>
+      <div class="param-group">
+        <label class="param-label">Título del Notebook</label>
+        <input type="text" id="nbTitleInput" class="param-input" placeholder="Ej. Script de automatización">
+      </div>
+      <div class="param-group">
+        <label class="param-label">Código Inicial</label>
+        <textarea id="nbInitialCodeInput" class="param-input" style="height:100px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; resize:vertical;" placeholder='console.log("Hola desde VPS!");'></textarea>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalNewNotebook')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmNewNotebook">Crear Notebook</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalNewFile">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Crear Nuevo Archivo</h3>
+      <div class="param-group">
+        <label class="param-label">Nombre del Archivo (con extensión)</label>
+        <input type="text" id="newFileNameInput" class="param-input" placeholder="ej. server.js, data.json, index.html">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalNewFile')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmNewFile">Crear Archivo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalNewFolder">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Crear Nueva Carpeta</h3>
+      <div class="param-group">
+        <label class="param-label">Nombre de la Carpeta</label>
+        <input type="text" id="newFolderNameInput" class="param-input" placeholder="ej. src, public, logs">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalNewFolder')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmNewFolder">Crear Carpeta</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalRename">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Renombrar Elemento</h3>
+      <div class="param-group">
+        <label class="param-label">Nombre Actual</label>
+        <input type="text" id="renameOldNameInput" class="param-input" readonly style="opacity:0.8;">
+      </div>
+      <div class="param-group">
+        <label class="param-label">Nuevo Nombre</label>
+        <input type="text" id="renameNewNameInput" class="param-input" placeholder="Escribe el nuevo nombre">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalRename')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmRename">Renombrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalDeleteConfirm">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px; color:#ef4444;">Eliminar Elemento</h3>
+      <p style="font-size:0.85rem; color:var(--text-gray); margin-bottom:14px;" id="deleteItemPromptText">¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.</p>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalDeleteConfirm')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px; background:#ef4444;" id="btnConfirmDelete">Eliminar Definitivamente</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="modalGithub">
     <div class="modal-content">
       <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Importar Repositorio de GitHub</h3>
