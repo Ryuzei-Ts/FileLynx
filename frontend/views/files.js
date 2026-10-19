@@ -32,7 +32,6 @@ export async function renderFiles(container, initialPath = '') {
   currentDirectory = initialPath;
 
   container.innerHTML = `
-    <!-- Card de Progreso Cybercom682 adaptada -->
     <div class="u-progress-card" id="cybercomProgress">
       <div class="u-progress-header">
         <h3 class="u-progress-title" id="cybercomTitle">Progress</h3>
@@ -369,43 +368,74 @@ window.executeRowAction = async function (action) {
       }
     };
   } else if (action === 'git-push') {
+    const folder = file.isDirectory ? file.path : currentDirectory;
     const savedToken = localStorage.getItem('filelynx_gh_token') || '';
-    document.getElementById('pushToken').value = savedToken;
-    document.getElementById('modalGitPush').classList.add('active');
 
-    document.getElementById('btnConfirmGitPush').onclick = async () => {
-      const repoUrl = document.getElementById('pushRepoUrl').value.trim();
-      const token = document.getElementById('pushToken').value.trim();
-      const branch = document.getElementById('pushBranch').value.trim() || 'main';
-      const commitMsg = document.getElementById('pushCommitMsg').value.trim() || 'Update from FileLynx';
+    updateProgress('Git Push', `Comprobando .git/config en ${file.name}...`, 25);
 
-      if (!repoUrl || !token) {
-        showAppDialog('Datos Incompletos', 'Ingresa la URL del repositorio y tu Personal Access Token', true);
+    try {
+      const pushRes = await fetch('/api/files/git-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: folder, token: savedToken || undefined }),
+      });
+      const pushData = await pushRes.json();
+
+      if (pushData.success) {
+        updateProgress('Git Push', 'Cambios enviados exitosamente a GitHub', 100);
+        window.showToast?.('Git Push exitoso ✰');
         return;
       }
 
-      localStorage.setItem('filelynx_gh_token', token);
-      document.getElementById('modalGitPush').classList.remove('active');
-      updateProgress('Git Push', `Pushing to ${repoUrl}...`, 50);
+      // Si falló el push automático, consulta .git/config y abre el modal precompletado
+      const infoRes = await fetch(`/api/files/git-info?path=${encodeURIComponent(folder)}`);
+      const gitInfo = await infoRes.json();
 
-      const folder = file.isDirectory ? file.path : currentDirectory;
-      try {
-        const res = await fetch('/api/files/git-push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderPath: folder, repoUrl, token, branch, commitMsg }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          updateProgress('Git Push', 'Cambios enviados exitosamente', 100);
-          showAppDialog('Git Push Exitoso', 'Los cambios se han enviado correctamente a GitHub.');
-        } else {
-          showAppDialog('Fallo de Git Push', data.error, true);
+      document.getElementById('cybercomProgress')?.classList.remove('active');
+
+      document.getElementById('pushRepoUrl').value = gitInfo.remoteUrl || '';
+      document.getElementById('pushBranch').value = gitInfo.branch || 'main';
+      document.getElementById('pushToken').value = savedToken;
+      document.getElementById('modalGitPush').classList.add('active');
+
+      document.getElementById('btnConfirmGitPush').onclick = async () => {
+        const repoUrl = document.getElementById('pushRepoUrl').value.trim();
+        const token = document.getElementById('pushToken').value.trim();
+        const branch = document.getElementById('pushBranch').value.trim() || 'main';
+        const commitMsg = document.getElementById('pushCommitMsg').value.trim() || 'Update from FileLynx';
+
+        // Cierra el modal de inmediato
+        document.getElementById('modalGitPush').classList.remove('active');
+
+        if (token) {
+          localStorage.setItem('filelynx_gh_token', token);
         }
-      } catch {
-        showAppDialog('Error de Conexión', 'No se pudo comunicar con el servidor para hacer push', true);
-      }
-    };
+
+        updateProgress('Git Push', `Enviando a ${repoUrl}...`, 50);
+
+        try {
+          const res = await fetch('/api/files/git-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderPath: folder, repoUrl, token, branch, commitMsg }),
+          });
+          const d = await res.json();
+          if (d.success) {
+            updateProgress('Git Push', 'Cambios enviados exitosamente', 100);
+            window.showToast?.('Git Push realizado exitosamente ✰');
+          } else {
+            document.getElementById('cybercomProgress')?.classList.remove('active');
+            showAppDialog('Fallo de Git Push', d.error, true);
+          }
+        } catch {
+          document.getElementById('cybercomProgress')?.classList.remove('active');
+          showAppDialog('Error de Conexión', 'No se pudo comunicar con el servidor para hacer push', true);
+        }
+      };
+    } catch {
+      document.getElementById('cybercomProgress')?.classList.remove('active');
+      showAppDialog('Error de Red', 'Fallo al procesar git push', true);
+    }
   } else if (action === 'edit') {
     openEditor(p);
   } else if (action === 'delete') {
