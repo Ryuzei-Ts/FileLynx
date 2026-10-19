@@ -5,6 +5,7 @@ import { app } from '#app';
 import { config } from '#config';
 import { db } from '#db';
 import { attach as attachTerminal } from '#routes/terminal';
+import { nginxService } from '#services/nginx';
 import { logger } from '#utils/logger';
 
 async function ensureAdminUser(): Promise<void> {
@@ -34,6 +35,8 @@ async function ensureAdminUser(): Promise<void> {
 
 async function bootstrap(): Promise<void> {
   await ensureAdminUser();
+
+   await nginxService.ensureDefaultIpProxy(config.PORT);
 
   const server = http.createServer(app);
   attachTerminal(server);
