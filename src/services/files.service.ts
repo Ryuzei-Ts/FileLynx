@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
+import { createReadStream, statSync } from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -9,7 +9,7 @@ import type { FileEntry } from '#types';
 const execAsync = promisify(exec);
 
 export const filesService = {
-  async list(relativeDirectory: string = ''): Promise<(FileEntry & { hasGit?: boolean })[]> {
+  async list(relativeDirectory: string = ''): Promise<(FileEntry & { hasGit?: boolean; isArchive?: boolean })[]> {
     const targetDir = resolveSafePath(relativeDirectory);
     const dirents = await fs.readdir(targetDir, { withFileTypes: true });
 
@@ -28,14 +28,18 @@ export const filesService = {
           }
         }
 
+        const ext = entry.isDirectory() ? undefined : path.extname(entry.name).toLowerCase();
+        const isArchive = Boolean(ext && ['.zip', '.tar', '.gz', '.tgz'].includes(ext));
+
         return {
           name: entry.name,
           path: path.posix.join(relativeDirectory, entry.name),
           size: stats.size,
           isDirectory: entry.isDirectory(),
           modifiedAt: stats.mtime,
-          extension: entry.isDirectory() ? undefined : path.extname(entry.name).toLowerCase(),
+          extension: ext,
           hasGit,
+          isArchive,
         };
       })
     );
@@ -87,6 +91,37 @@ export const filesService = {
     return createReadStream(safePath);
   },
 
+  async compress(sourceRelativePath: string, format: 'zip' | 'tar.gz' = 'zip'): Promise<string> {
+    const safeSrc = resolveSafePath(sourceRelativePath);
+    const parentDir = path.dirname(safeSrc);
+    const baseName = path.basename(safeSrc);
+    const archiveName = `${baseName}.${format === 'zip' ? 'zip' : 'tar.gz'}`;
+    const archivePath = path.join(parentDir, archiveName);
+
+    if (format === 'zip') {
+      await execAsync(`cd "${parentDir}" && zip -r -q "${archiveName}" "${baseName}"`);
+    } else {
+      await execAsync(`cd "${parentDir}" && tar -czf "${archiveName}" "${baseName}"`);
+    }
+    return archiveName;
+  },
+
+  async extract(archiveRelativePath: string, destinationDir?: string): Promise<void> {
+    const safeArchive = resolveSafePath(archiveRelativePath);
+    const targetDest = destinationDir ? resolveSafePath(destinationDir) : path.dirname(safeArchive);
+    const ext = safeArchive.toLowerCase();
+
+    if (ext.endsWith('.zip')) {
+      await execAsync(`unzip -o -q "${safeArchive}" -d "${targetDest}"`);
+    } else if (ext.endsWith('.tar.gz') || ext.endsWith('.tgz')) {
+      await execAsync(`tar -xzf "${safeArchive}" -C "${targetDest}"`);
+    } else if (ext.endsWith('.tar')) {
+      await execAsync(`tar -xf "${safeArchive}" -C "${targetDest}"`);
+    } else {
+      throw new Error('Formato no soportado. Usa .zip, .tar.gz o .tar');
+    }
+  },
+
   async importFromGitHub(repoUrl: string, targetSubPath: string, token?: string, branch?: string): Promise<void> {
     const targetFolder = resolveSafePath(targetSubPath);
     await fs.mkdir(targetFolder, { recursive: true });
@@ -127,7 +162,7 @@ export const filesService = {
 
     const authRemote = `https://${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
     const cmd = `cd "${safeDir}" && git config user.name "FileLynx" && git config user.email "filelynx@local" && git remote remove origin 2>/dev/null || true && git remote add origin "${authRemote}" && git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}" || true && git branch -M "${branch}" && git push -u origin "${branch}" --force`;
-    
+
     const { stdout, stderr } = await execAsync(cmd);
     return stdout || stderr;
   },
