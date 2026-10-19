@@ -12,6 +12,7 @@ import systemRouter from '#routes/system';
 import notebooksRouter from '#routes/notebooks';
 import ftpRouter from '#routes/ftp';
 import s3Router from '#routes/s3';
+import nginxRouter from '#routes/nginx';
 
 process.on('uncaughtException', (err: Error) => {
   logger.error('CRASH PREVENIDO [uncaughtException]:', err.message);
@@ -105,6 +106,7 @@ app.use('/api/system', systemRouter);
 app.use('/api/notebooks', notebooksRouter);
 app.use('/api/ftp', ftpRouter);
 app.use('/api/s3', s3Router);
+app.use('/api/nginx', nginxRouter);
 
 app.get(['/files/*', '/:section'], (req: Request, res: Response, next: NextFunction) => {
   const section = req.params.section || (req.path.startsWith('/files') ? 'files' : '');
@@ -113,7 +115,7 @@ app.get(['/files/*', '/:section'], (req: Request, res: Response, next: NextFunct
     return next();
   }
 
-  const spaRoutes = ['files', 'terminal', 'notebooks', 'ftp', 's3', 'changelog'];
+  const spaRoutes = ['files', 'terminal', 'notebooks', 'ftp', 's3', 'changelog', 'domains'];
   if (spaRoutes.includes(section.toLowerCase()) || req.path.startsWith('/files')) {
     return res.sendFile(path.join(process.cwd(), 'frontend', 'index.html'));
   }
@@ -123,6 +125,6 @@ app.get(['/files/*', '/:section'], (req: Request, res: Response, next: NextFunct
 
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   const msg = err instanceof Error ? err.message : 'Error interno del servidor';
-  logger.error(`[Error controlado en ${req.method} ${req.url}]:`, msg);
+  logger.error(`[Error en ${req.method} ${req.url}]:`, msg);
   res.status(500).json({ error: 'Ocurrió un error en el servidor.' });
 });
