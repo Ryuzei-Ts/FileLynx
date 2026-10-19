@@ -7,7 +7,7 @@ export async function renderFiles(container, initialPath = '') {
   updateContextButtonState();
 
   container.innerHTML = `
-    <!-- Barra de progreso (Cybercom682) -->
+    <!-- Barra de progreso para cargas/descargas -->
     <div class="progress-card" id="taskProgressBar">
       <div class="progress-header">
         <h4 style="font-size:0.85rem; font-weight:800;" id="progTitle">Operación en curso</h4>
@@ -21,43 +21,39 @@ export async function renderFiles(container, initialPath = '') {
       </div>
     </div>
 
-    <!-- Upload Card (Gautammsharma) -->
-    <div class="u-wrapper">
-      <div class="u-container">
-        <div class="u-inner">
-          <div class="u-icon">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-              <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-              <path d="M5 16V18C5 19.1 5.9 20 7 20H17C18.1 20 19 19.1 19 18V16" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-            </svg>
-          </div>
-          <div class="u-title">Subir Archivos y Carpetas</div>
-          <div class="u-text">
-            Sube recursos directamente a la VPS o descarga código desde GitHub.
-          </div>
-          
-          <input class="u-input" type="file" id="fileUploadInput" multiple />
-          <input class="u-input" type="file" id="folderUploadInput" webkitdirectory directory multiple />
-
-          <div class="u-actions">
-            <button class="u-button" onclick="document.getElementById('fileUploadInput').click()">+ Subir Archivos</button>
-            <button class="u-button secondary" onclick="document.getElementById('folderUploadInput').click()">+ Subir Carpeta</button>
-            <button class="u-button secondary" onclick="openGithubModal()"><i class="fab fa-github"></i> Importar GitHub</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Inputs ocultos para subida de archivos y carpetas -->
+    <input class="u-input" type="file" id="fileUploadInput" multiple style="display:none;" />
+    <input class="u-input" type="file" id="folderUploadInput" webkitdirectory directory multiple style="display:none;" />
 
     <!-- Panel de Exploración -->
     <div class="panel-box">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-        <div style="display:flex; gap:8px; flex:1; min-width:260px;">
+        <div style="display:flex; gap:8px; flex:1; min-width:240px;">
           <input type="text" id="dirInput" class="param-input" value="${currentDirectory}" placeholder="/ruta"/>
           <button class="stat-btn" id="btnGo"><i class="fas fa-level-up-alt"></i> Ir</button>
         </div>
-        <div style="display:flex; gap:6px;">
+        
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
           <button class="stat-btn" id="btnNewFile"><i class="fas fa-file-plus"></i> + Archivo</button>
           <button class="stat-btn" id="btnNewDir"><i class="fas fa-folder-plus"></i> + Carpeta</button>
+          
+          <!-- Botón Importar con menú flotante -->
+          <div class="import-dropdown-wrapper">
+            <button class="stat-btn" id="btnImportMenu" style="background:var(--primary); color:#ffffff; border-color:var(--primary);">
+              <i class="fas fa-cloud-upload-alt"></i> Importar <i class="fas fa-chevron-down" style="font-size:0.65rem; margin-left:4px;"></i>
+            </button>
+            <div class="import-floating-menu" id="importFloatingMenu">
+              <div class="menu-item" onclick="triggerImportOption('files')">
+                <i class="fas fa-file-upload text-primary"></i> Subir Archivos
+              </div>
+              <div class="menu-item" onclick="triggerImportOption('folder')">
+                <i class="fas fa-folder-upload" style="color:var(--price-color);"></i> Subir Carpeta
+              </div>
+              <div class="menu-item" onclick="triggerImportOption('github')">
+                <i class="fab fa-github"></i> Importar GitHub
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -69,11 +65,36 @@ export async function renderFiles(container, initialPath = '') {
   document.getElementById('btnNewFile').onclick = createPromptFile;
   document.getElementById('btnNewDir').onclick = createPromptFolder;
 
+  // Toggle del menú desplegable Importar
+  const importBtn = document.getElementById('btnImportMenu');
+  const importMenu = document.getElementById('importFloatingMenu');
+  importBtn.onclick = (e) => {
+    e.stopPropagation();
+    importMenu.classList.toggle('open');
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.import-dropdown-wrapper')) {
+      importMenu?.classList.remove('open');
+    }
+  });
+
   document.getElementById('fileUploadInput').onchange = (e) => handleUpload(e.target.files);
   document.getElementById('folderUploadInput').onchange = (e) => handleUpload(e.target.files);
 
   loadDir(currentDirectory);
 }
+
+window.triggerImportOption = function (type) {
+  document.getElementById('importFloatingMenu')?.classList.remove('open');
+  if (type === 'files') {
+    document.getElementById('fileUploadInput').click();
+  } else if (type === 'folder') {
+    document.getElementById('folderUploadInput').click();
+  } else if (type === 'github') {
+    openGithubModal();
+  }
+};
 
 async function loadDir(dirPath) {
   currentDirectory = dirPath;
@@ -230,7 +251,7 @@ async function handleUpload(files) {
     window.showToast?.('Archivos subidos correctamente');
     setTimeout(() => bar.classList.remove('active'), 1500);
     loadDir(currentDirectory);
-  } catch (err) {
+  } catch {
     label.innerText = 'Error al subir';
     setTimeout(() => bar.classList.remove('active'), 2500);
   }
@@ -288,7 +309,7 @@ document.getElementById('btnConfirmGithub').onclick = async () => {
     } else {
       alert(`Error de descarga: ${d.error}`);
     }
-  } catch (err) {
+  } catch {
     alert('Fallo de conexión al importar GitHub');
   }
 };
