@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80">
+  <rect width="60" height="60" x="10" y="10" rx="14" fill="#4f80ff"/>
+  <path d="M25 25 L40 55 L55 25" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="85" y="50" font-family="sans-serif" font-size="34" font-weight="bold" fill="#ffffff">FileLynx</text>
+</svg>
