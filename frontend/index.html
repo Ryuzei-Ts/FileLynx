@@ -3,81 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title id="sitePageTitle">FileLynx Web Manager</title>
+  <title id="sitePageTitle">FileLynx Dashboard</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
-
-  <!-- Monaco Editor Loader -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 </head>
 <body>
 
-  <div class="topbar" id="mainTopbar" style="display:none;">
+  <!-- Topbar -->
+  <header class="topbar" id="mainTopbar" style="display:none;">
     <div class="topbar-left">
       <div class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></div>
-      <span class="api-name-top" onclick="navigate('files')">FileLynx Manager ✰</span>
+      <span class="api-name-top" onclick="navigate('files')">FileLynx ✰</span>
     </div>
     <div class="topbar-right">
-      <div class="dark-mode-toggle" onclick="toggleTheme()">
-        <i class="fas fa-moon" id="theme-icon"></i>
+      <!-- Botón Contextual que aparece solo al seleccionar un archivo -->
+      <button id="fileContextTrigger" onclick="toggleFileContextMenu()">
+        <i class="fas fa-ellipsis-v"></i> Opciones de Selección
+      </button>
+
+      <!-- Menú Nazar-Gavrylyk en tema claro -->
+      <div class="card-context-menu" id="fileContextMenu">
+        <ul class="list">
+          <li class="element" onclick="triggerFileAction('rename')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path>
+              <path d="m15 5 4 4"></path>
+            </svg>
+            <p class="label">Renombrar</p>
+          </li>
+          <li class="element" onclick="triggerFileAction('edit')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <p class="label">Editar archivo</p>
+          </li>
+          <li class="element" onclick="triggerFileAction('download')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <p class="label">Descargar</p>
+          </li>
+        </ul>
+        <div class="separator"></div>
+        <ul class="list">
+          <li class="element delete" onclick="triggerFileAction('delete')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+            <p class="label">Eliminar</p>
+          </li>
+        </ul>
       </div>
+
+      <!-- Icono de GitHub hacia tu perfil -->
+      <a href="https://github.com/Ryuzei-Ts/FileLynx" target="_blank" rel="noopener noreferrer" class="menu-toggle" style="text-decoration:none;" title="Ver en GitHub">
+        <i class="fab fa-github" style="font-size:1.2rem; color:var(--text-dark);"></i>
+      </a>
     </div>
-  </div>
+  </header>
 
   <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
+  <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div>
-      <div class="user-badge-sidebar" id="sidebarUserBox">
-        <span>Autenticado en VPS</span>
+      <div class="user-badge-sidebar">
+        <span>VPS Conectada</span>
         <b id="uEmail">admin</b>
-        <div class="user-vps-display" id="dispVpsHost">Cargando servidor...</div>
       </div>
-
       <div class="sidebar-section">
-        <p class="sidebar-title">Navegación</p>
-        <a class="sidebar-item active" id="nav-files" onclick="navigate('files')">
+        <p class="sidebar-title">Módulos</p>
+        <div class="sidebar-item active" id="nav-files" onclick="navigate('files')">
           <i class="fas fa-folder"></i> Explorador
-        </a>
-        <a class="sidebar-item" id="nav-editor" onclick="navigate('editor')">
-          <i class="fas fa-code"></i> Monaco Editor
-        </a>
-        <a class="sidebar-item" id="nav-terminal" onclick="navigate('terminal')">
+        </div>
+        <div class="sidebar-item" id="nav-terminal" onclick="navigate('terminal')">
           <i class="fas fa-terminal"></i> Terminal PTY
-        </a>
-        <a class="sidebar-item" id="nav-notebooks" onclick="navigate('notebooks')">
+        </div>
+        <div class="sidebar-item" id="nav-notebooks" onclick="navigate('notebooks')">
           <i class="fas fa-book"></i> Notebooks
-        </a>
-        <a class="sidebar-item" id="nav-ftp" onclick="navigate('ftp')">
+        </div>
+        <div class="sidebar-item" id="nav-ftp" onclick="navigate('ftp')">
           <i class="fas fa-network-wired"></i> Cliente FTP
-        </a>
-        <a class="sidebar-item" id="nav-s3" onclick="navigate('s3')">
+        </div>
+        <div class="sidebar-item" id="nav-s3" onclick="navigate('s3')">
           <i class="fas fa-cloud"></i> S3 Bucket
-        </a>
+        </div>
       </div>
     </div>
-
-    <div style="border-top: 1px solid var(--border); padding-top: 14px;">
-      <div class="sidebar-item" onclick="logout()" style="color: #ef4444;">
-        <i class="fas fa-sign-out-alt" style="color: #ef4444 !important;"></i> Cerrar Sesión
+    <div style="border-top:1px solid var(--border); padding-top:14px;">
+      <div class="sidebar-item" onclick="logout()" style="color:#ef4444;">
+        <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
       </div>
     </div>
   </aside>
 
-  <!-- Login view (sin register) -->
+  <!-- Login (sin register) -->
   <div id="view-auth" class="auth-container-wrapper">
     <div class="auth-card-large">
-      <div style="text-align:center; margin-bottom:22px;">
-        <div style="width:52px; height:52px; border-radius:16px; background:var(--primary); color:#ffffff; display:inline-flex; align-items:center; justify-content:center; font-size:1.4rem; font-weight:900; margin-bottom:12px; box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.35);">
-          <i class="fas fa-server"></i>
-        </div>
-        <h2 style="font-weight: 800; font-size: 1.5rem; color:var(--text-dark); letter-spacing: -0.5px;">Acceso a FileLynx</h2>
-        <p style="font-size: 0.82rem; color: var(--text-gray); font-weight: 700; margin-top:4px;" id="loginHostSubtitle">VPS Terminal & Editor</p>
+      <div style="text-align:center; margin-bottom:20px;">
+        <h2 style="font-weight:800; font-size:1.4rem;">Acceso al Servidor</h2>
+        <p style="font-size:0.8rem; color:var(--text-gray); margin-top:4px;" id="loginHostSubtitle">VPS Manager</p>
       </div>
-
       <form id="authForm">
         <div class="param-group">
           <label class="param-label">Usuario</label>
@@ -87,27 +121,56 @@
           <label class="param-label">Contraseña</label>
           <input type="password" id="authPassword" class="param-input" required placeholder="••••••••">
         </div>
-        <button type="submit" class="btn-full" id="authSubmitBtn">Iniciar Sesión</button>
+        <button type="submit" class="btn-full">Ingresar</button>
       </form>
-
-      <div style="margin-top: 18px; padding: 12px; background: var(--bg-params); border-radius: var(--radius-element); border: 1px solid var(--border);">
-        <p style="font-size: 0.72rem; color: var(--text-gray); line-height: 1.45; text-align: center;">
-          ¿Olvidaste tu contraseña? Ejecuta en tu VPS:<br>
-          <code style="color: var(--primary); font-weight: 800;">npm run reset-password</code>
-        </p>
-      </div>
-
-      <p id="authErr" style="color: #ef4444; font-size: 0.8rem; font-weight: 700; text-align: center; margin-top: 12px; display: none;"></p>
+      <p id="authErr" style="color:#ef4444; font-size:0.8rem; text-align:center; margin-top:10px; display:none;"></p>
     </div>
   </div>
 
-  <!-- Panel principal -->
+  <!-- Main View -->
   <main class="main-content" id="panelMainContent" style="display:none;">
     <div id="view-container"></div>
   </main>
 
-  <div id="toast">Acción completada con éxito</div>
-  <footer>FileLynx Cloud IDE &copy; 2026 Ryuzei-Ts</footer>
+  <!-- Modal Editor de Archivo -->
+  <div class="modal" id="modalEditor">
+    <div class="modal-content" style="max-width:800px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 id="modalEditorTitle" style="font-size:1rem; font-weight:800;">Editar Archivo</h3>
+        <button class="stat-btn" onclick="closeModal('modalEditor')">✕</button>
+      </div>
+      <textarea id="modalEditorContent" class="param-input" style="height:420px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; resize:vertical;"></textarea>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+        <button class="stat-btn" onclick="closeModal('modalEditor')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 20px;" id="btnSaveEditor">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal GitHub Import -->
+  <div class="modal" id="modalGithub">
+    <div class="modal-content">
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Importar Repositorio de GitHub</h3>
+      <div class="param-group">
+        <label class="param-label">URL del Repositorio (usuario/repo)</label>
+        <input type="text" id="ghRepoUrl" class="param-input" placeholder="https://github.com/usuario/repo">
+      </div>
+      <div class="param-group">
+        <label class="param-label">Rama (opcional)</label>
+        <input type="text" id="ghBranch" class="param-input" placeholder="main">
+      </div>
+      <div class="param-group">
+        <label class="param-label">GitHub Token (opcional para repositorios privados)</label>
+        <input type="password" id="ghToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button class="stat-btn" onclick="closeModal('modalGithub')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmGithub">Descargar a Carpeta Actual</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast">Acción realizada</div>
 
   <script type="module" src="app.js"></script>
 </body>
