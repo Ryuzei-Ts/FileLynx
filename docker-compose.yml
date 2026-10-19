@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  filelynx:
+    build: .
+    container_name: filelynx_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - SESSION_SECRET=change_this_to_a_secure_random_key
+      - DATABASE_PATH=/app/data/filelynx.db
+      - ROOT_DIR=/data
+    volumes:
+      - ./data:/app/data
+      - ./storage:/data
