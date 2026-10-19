@@ -40,6 +40,9 @@
         <div class="sidebar-item" id="nav-terminal" onclick="navigate('terminal')">
           <i class="fas fa-terminal"></i> Terminal
         </div>
+        <div class="sidebar-item" id="nav-domains" onclick="navigate('domains')">
+          <i class="fas fa-globe"></i> Dominios & SSL
+        </div>
         <div class="sidebar-item" id="nav-notebooks" onclick="navigate('notebooks')">
           <i class="fas fa-book"></i> Notebooks
         </div>
@@ -67,7 +70,7 @@
         <h2 style="font-weight:800; font-size:1.4rem;">Acceso al Servidor</h2>
         <p style="font-size:0.8rem; color:var(--text-gray); margin-top:4px;" id="loginHostSubtitle">VPS Manager</p>
       </div>
-      <form id="authForm">
+      <form id="authForm" onsubmit="event.preventDefault(); doLogin(); return false;">
         <div class="param-group">
           <label class="param-label">Usuario</label>
           <input type="text" id="authUsername" class="param-input" required placeholder="admin">
@@ -76,7 +79,7 @@
           <label class="param-label">Contraseña</label>
           <input type="password" id="authPassword" class="param-input" required placeholder="••••••••">
         </div>
-        <button type="submit" class="btn-full">Ingresar</button>
+        <button type="button" class="btn-full" id="authSubmitBtn" onclick="doLogin()">Ingresar</button>
       </form>
       <p id="authErr" style="color:#ef4444; font-size:0.8rem; text-align:center; margin-top:10px; display:none;"></p>
     </div>
@@ -183,7 +186,7 @@
     <div class="modal-content">
       <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;"><i class="fab fa-github"></i> Git Pull (Actualizar Carpeta)</h3>
       <div class="param-group">
-        <label class="param-label">URL del Repositorio (opcional si ya tiene .git)</label>
+        <label class="param-label">URL del Repositorio</label>
         <input type="text" id="pullRepoUrl" class="param-input" placeholder="https://github.com/usuario/repo">
       </div>
       <div class="param-group">
