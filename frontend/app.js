@@ -3,6 +3,7 @@ import { renderTerminal } from './views/terminal.js';
 import { renderNotebooks } from './views/notebooks.js';
 import { renderFTP } from './views/ftp.js';
 import { renderS3 } from './views/s3.js';
+import { renderChangelog } from './views/changelog.js';
 
 const container = document.getElementById('view-container');
 let currentUser = null;
@@ -13,6 +14,7 @@ const views = {
   notebooks: renderNotebooks,
   ftp: renderFTP,
   s3: renderS3,
+  changelog: renderChangelog,
 };
 
 window.showToast = function (msg) {
@@ -31,7 +33,6 @@ window.closeModal = function (id) {
   document.getElementById(id).classList.remove('active');
 };
 
-// Navegación con soporte para historial del navegador móvil
 window.navigate = function (viewName, pushState = true) {
   if (!currentUser) return;
   const targetView = views[viewName] ? viewName : 'files';
@@ -45,7 +46,6 @@ window.navigate = function (viewName, pushState = true) {
     window.toggleSidebar();
   }
 
-  // Agrega al historial para que el botón atrás del móvil funcione
   if (pushState && window.location.pathname.replace(/^\/+/, '') !== targetView) {
     window.history.pushState({ view: targetView }, '', `/${targetView}`);
   }
@@ -54,7 +54,6 @@ window.navigate = function (viewName, pushState = true) {
   renderer(container);
 };
 
-// Escucha el botón "atrás" del teléfono
 window.addEventListener('popstate', (event) => {
   if (!currentUser) return;
   const targetView = event.state?.view || window.location.pathname.replace(/^\/+/, '') || 'files';
@@ -121,8 +120,9 @@ async function init() {
   document.getElementById('mainTopbar').style.display = 'flex';
   document.getElementById('uEmail').innerText = currentUser.username;
 
-   const initialRoute = window.location.pathname.replace(/^\/+/, '') || 'files';
-  window.navigate(initialRoute, false);
+  const currentPath = window.location.pathname.replace(/^\/+/, '');
+  const initialRoute = currentPath.split('/')[0] || 'files';
+  window.navigate(views[initialRoute] ? initialRoute : 'files', false);
 }
 
 window.onload = init;
