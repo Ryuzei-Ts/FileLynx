@@ -179,29 +179,25 @@
     </div>
   </div>
 
-  <div class="modal" id="modalGitPush">
+  <div class="modal" id="modalGitPull">
     <div class="modal-content">
-      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;"><i class="fab fa-github"></i> Git Push al Repositorio</h3>
+      <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;"><i class="fab fa-github"></i> Git Pull (Actualizar Carpeta)</h3>
       <div class="param-group">
-        <label class="param-label">URL del Repositorio (usuario/repo)</label>
-        <input type="text" id="pushRepoUrl" class="param-input" placeholder="https://github.com/usuario/repo">
+        <label class="param-label">URL del Repositorio (opcional si ya tiene .git)</label>
+        <input type="text" id="pullRepoUrl" class="param-input" placeholder="https://github.com/usuario/repo">
       </div>
       <div class="param-group">
-        <label class="param-label">GitHub Personal Access Token</label>
-        <input type="password" id="pushToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
-        <span style="font-size:0.7rem; color:var(--text-gray); display:block; margin-top:4px;">Introduce o actualiza tu token si el anterior expiró.</span>
+        <label class="param-label">GitHub Token (solo si es privado)</label>
+        <input type="password" id="pullToken" class="param-input" placeholder="ghp_xxxxxxxxxxxx">
+        <span style="font-size:0.7rem; color:var(--text-gray); display:block; margin-top:4px;">Déjalo vacío si el repositorio es público.</span>
       </div>
       <div class="param-group">
         <label class="param-label">Rama</label>
-        <input type="text" id="pushBranch" class="param-input" value="main">
-      </div>
-      <div class="param-group">
-        <label class="param-label">Mensaje de Commit</label>
-        <input type="text" id="pushCommitMsg" class="param-input" value="Update from FileLynx">
+        <input type="text" id="pullBranch" class="param-input" value="main">
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
-        <button class="stat-btn" onclick="closeModal('modalGitPush')">Cancelar</button>
-        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmGitPush">Hacer Push</button>
+        <button class="stat-btn" onclick="closeModal('modalGitPull')">Cancelar</button>
+        <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmGitPull">Hacer Pull</button>
       </div>
     </div>
   </div>
