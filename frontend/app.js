@@ -1,50 +1,52 @@
-import { renderFiles } from './views/files.js';
-import { renderTerminal } from './views/terminal.js';
-import { renderNotebooks } from './views/notebooks.js';
-import { renderFTP } from './views/ftp.js';
-import { renderS3 } from './views/s3.js';
-import { renderChangelog } from './views/changelog.js';
-import { renderDomains } from './views/domains.js';
-
 const container = document.getElementById('view-container');
 let currentUser = null;
 
-const views = {
-  files: renderFiles,
-  terminal: renderTerminal,
-  domains: renderDomains,
-  notebooks: renderNotebooks,
-  ftp: renderFTP,
-  s3: renderS3,
-  changelog: renderChangelog,
+const viewLoaders = {
+  files: () => import('./views/files.js').then((m) => m.renderFiles),
+  terminal: () => import('./views/terminal.js').then((m) => m.renderTerminal),
+  domains: () => import('./views/domains.js').then((m) => m.renderDomains),
+  notebooks: () => import('./views/notebooks.js').then((m) => m.renderNotebooks),
+  ftp: () => import('./views/ftp.js').then((m) => m.renderFTP),
+  s3: () => import('./views/s3.js').then((m) => m.renderS3),
+  changelog: () => import('./views/changelog.js').then((m) => m.renderChangelog),
 };
 
+let toastTimer = null;
 window.showToast = function (msg) {
   const toast = document.getElementById('toast');
+  if (!toast || !msg) return;
   toast.innerText = msg;
   toast.classList.add('active');
-  setTimeout(() => toast.classList.remove('active'), 2500);
+
+  toast.onclick = () => {
+    toast.classList.remove('active');
+    if (toastTimer) clearTimeout(toastTimer);
+  };
+
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('active');
+  }, 2500);
 };
 
 window.toggleSidebar = function () {
-  document.getElementById('sidebar').classList.toggle('active');
-  document.getElementById('overlay').classList.toggle('active');
+  document.getElementById('sidebar')?.classList.toggle('active');
+  document.getElementById('overlay')?.classList.toggle('active');
 };
 
 window.closeModal = function (id) {
-  document.getElementById(id).classList.remove('active');
+  document.getElementById(id)?.classList.remove('active');
 };
 
-window.navigate = function (viewName, pushState = true) {
+window.navigate = async function (viewName, pushState = true) {
   if (!currentUser) return;
-  const targetView = views[viewName] ? viewName : 'files';
-  const renderer = views[targetView];
+  const targetView = viewLoaders[viewName] ? viewName : 'files';
 
   document.querySelectorAll('.sidebar-item').forEach((item) => {
     item.classList.toggle('active', item.id === `nav-${targetView}`);
   });
 
-  if (document.getElementById('sidebar').classList.contains('active')) {
+  if (document.getElementById('sidebar')?.classList.contains('active')) {
     window.toggleSidebar();
   }
 
@@ -52,8 +54,16 @@ window.navigate = function (viewName, pushState = true) {
     window.history.pushState({ view: targetView }, '', `/${targetView}`);
   }
 
-  container.innerHTML = '';
-  renderer(container);
+  if (container) {
+    container.innerHTML = '<p style="padding:20px; color:var(--text-gray);">Cargando módulo...</p>';
+    try {
+      const renderFn = await viewLoaders[targetView]();
+      container.innerHTML = '';
+      await renderFn(container);
+    } catch (err) {
+      container.innerHTML = `<div class="panel-box" style="color:#ef4444;"><h4>Error al cargar el módulo ${targetView}</h4><p>${err.message}</p></div>`;
+    }
+  }
 };
 
 window.addEventListener('popstate', (event) => {
@@ -63,17 +73,36 @@ window.addEventListener('popstate', (event) => {
 });
 
 window.logout = async function () {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch {}
   localStorage.removeItem('filelynx_user');
   currentUser = null;
   init();
 };
 
-document.getElementById('authForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const username = document.getElementById('authUsername').value.trim();
-  const password = document.getElementById('authPassword').value.trim();
+window.doLogin = async function () {
+  const userInput = document.getElementById('authUsername');
+  const passInput = document.getElementById('authPassword');
   const errBox = document.getElementById('authErr');
+  const btn = document.getElementById('authSubmitBtn');
+
+  const username = userInput ? userInput.value.trim() : '';
+  const password = passInput ? passInput.value.trim() : '';
+
+  if (!username || !password) {
+    if (errBox) {
+      errBox.innerText = 'Escribe tu usuario y contraseña';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Verificando...';
+  }
+  if (errBox) errBox.style.display = 'none';
 
   try {
     const res = await fetch('/api/auth/login', {
@@ -81,25 +110,37 @@ document.getElementById('authForm').addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
+
     const data = await res.json();
-    if (!data.success) {
-      errBox.innerText = data.error || 'Credenciales incorrectas';
-      errBox.style.display = 'block';
+
+    if (!res.ok || !data.success) {
+      if (errBox) {
+        errBox.innerText = data.error || 'Usuario o contraseña incorrectos';
+        errBox.style.display = 'block';
+      }
       return;
     }
 
     currentUser = data.user;
     localStorage.setItem('filelynx_user', JSON.stringify(currentUser));
     init();
-  } catch {
-    errBox.innerText = 'Error al comunicarse con el servidor';
-    errBox.style.display = 'block';
+  } catch (err) {
+    if (errBox) {
+      errBox.innerText = 'Fallo de conexión con el servidor: ' + err.message;
+      errBox.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Ingresar';
+    }
   }
-});
+};
 
 async function init() {
   const vpsHost = window.location.host;
-  document.getElementById('loginHostSubtitle').innerText = `Servidor: ${vpsHost}`;
+  const subTitle = document.getElementById('loginHostSubtitle');
+  if (subTitle) subTitle.innerText = `Servidor: ${vpsHost}`;
 
   const saved = localStorage.getItem('filelynx_user');
   if (saved) {
@@ -110,21 +151,29 @@ async function init() {
     }
   }
 
+  const viewAuth = document.getElementById('view-auth');
+  const mainContent = document.getElementById('panelMainContent');
+  const topbar = document.getElementById('mainTopbar');
+  const sidebar = document.getElementById('sidebar');
+  const uEmail = document.getElementById('uEmail');
+
   if (!currentUser) {
-    document.getElementById('view-auth').style.display = 'flex';
-    document.getElementById('panelMainContent').style.display = 'none';
-    document.getElementById('mainTopbar').style.display = 'none';
+    if (viewAuth) viewAuth.style.display = 'flex';
+    if (mainContent) mainContent.style.display = 'none';
+    if (topbar) topbar.style.display = 'none';
+    if (sidebar) sidebar.style.display = 'none';
     return;
   }
 
-  document.getElementById('view-auth').style.display = 'none';
-  document.getElementById('panelMainContent').style.display = 'block';
-  document.getElementById('mainTopbar').style.display = 'flex';
-  document.getElementById('uEmail').innerText = currentUser.username;
+  if (viewAuth) viewAuth.style.display = 'none';
+  if (mainContent) mainContent.style.display = 'block';
+  if (topbar) topbar.style.display = 'flex';
+  if (sidebar) sidebar.style.display = 'flex';
+  if (uEmail) uEmail.innerText = currentUser.username;
 
   const currentPath = window.location.pathname.replace(/^\/+/, '');
   const initialRoute = currentPath.split('/')[0] || 'files';
-  window.navigate(views[initialRoute] ? initialRoute : 'files', false);
+  window.navigate(viewLoaders[initialRoute] ? initialRoute : 'files', false);
 }
 
 window.onload = init;
