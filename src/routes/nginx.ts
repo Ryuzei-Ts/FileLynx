@@ -48,7 +48,7 @@ router.post('/save-domain-route', async (req: Request, res: Response): Promise<v
         } catch (sslErr: any) {
           res.json({
             success: true,
-            warning: 'Nginx guardado pero Certbot SSL arrojó un error:\n' + sslErr.message,
+            warning: 'Nginx guardado pero Certbot SSL arrojó un aviso:\n' + sslErr.message,
           });
           return;
         }
