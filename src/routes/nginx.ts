@@ -28,34 +28,28 @@ router.get('/free-port', async (_req: Request, res: Response): Promise<void> => 
 
 router.post('/save-domain-route', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { domain, isSubRoute, routePath, targetType, target, email, autoSsl } = req.body;
+    const { domain, targetType, target, email, autoSsl } = req.body;
     if (!domain || !target) {
       res.status(400).json({ error: 'Debes indicar el dominio y el puerto/carpeta de destino.' });
       return;
     }
 
-    if (isSubRoute) {
-      if (!routePath) {
-        res.status(400).json({ error: 'Debes indicar la subruta URL (ej. /files/database).' });
+    const assignedPort = await nginxService.createOrUpdateDomain(domain, targetType, target);
+
+    if (autoSsl) {
+      try {
+        await nginxService.issueSsl(domain, email);
+      } catch (sslErr: any) {
+        res.json({
+          success: true,
+          assignedPort,
+          warning: 'Nginx guardado pero Certbot SSL arrojó un aviso:\n' + sslErr.message,
+        });
         return;
-      }
-      await nginxService.addSubRoute(domain, routePath, targetType, target);
-    } else {
-      await nginxService.createOrUpdateDomain(domain, targetType, target);
-      if (autoSsl) {
-        try {
-          await nginxService.issueSsl(domain, email);
-        } catch (sslErr: any) {
-          res.json({
-            success: true,
-            warning: 'Nginx guardado pero Certbot SSL arrojó un aviso:\n' + sslErr.message,
-          });
-          return;
-        }
       }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, assignedPort });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al guardar la configuración en Nginx' });
   }
