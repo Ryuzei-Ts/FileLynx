@@ -3,17 +3,20 @@ import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { logger } from '#utils/logger';
+import { resolveSafePath } from '#utils/paths';
 
 const execAsync = promisify(exec);
 
 export interface SubRoute {
   path: string;
-  targetPort: number;
+  type: 'port' | 'path';
+  target: string;
 }
 
 export interface DomainSite {
   domain: string;
-  targetPort: number;
+  targetType: 'port' | 'path';
+  target: string;
   hasSsl: boolean;
   enabled: boolean;
   subRoutes: SubRoute[];
@@ -107,8 +110,20 @@ export const nginxService = {
         const filePath = path.join(availableDir, file);
         const content = await fs.readFile(filePath, 'utf-8');
 
+        let targetType: 'port' | 'path' = 'port';
+        let target = '3000';
+
         const rootPortMatch = content.match(/location\s+\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+);/);
-        const targetPort = rootPortMatch ? parseInt(rootPortMatch[1], 10) : 3000;
+        const rootPathMatch = content.match(/location\s+\/\s*\{[^}]*(?:root|alias)\s+([^;]+);/);
+
+        if (rootPortMatch) {
+          targetType = 'port';
+          target = rootPortMatch[1];
+        } else if (rootPathMatch) {
+          targetType = 'path';
+          target = rootPathMatch[1].trim();
+        }
+
         const hasSsl = content.includes('ssl_certificate') || content.includes('managed by Certbot');
 
         let enabled = false;
@@ -118,21 +133,20 @@ export const nginxService = {
         } catch {}
 
         const subRoutes: SubRoute[] = [];
-        const locationRegex = /location\s+(?:\^~\s*)?(\/[a-zA-Z0-9_\-\/]+)\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+)\/?;/g;
+        const locationRegex = /# ROUTE_START:([^\n]+)\n\s*# TYPE:([^\n]+)\n\s*# TARGET:([^\n]+)/g;
         let match;
         while ((match = locationRegex.exec(content)) !== null) {
-          const matchedPath = match[1];
-          if (matchedPath !== '/') {
-            subRoutes.push({
-              path: matchedPath,
-              targetPort: parseInt(match[2], 10),
-            });
-          }
+          subRoutes.push({
+            path: match[1].trim(),
+            type: match[2].trim() as 'port' | 'path',
+            target: match[3].trim(),
+          });
         }
 
         results.push({
           domain,
-          targetPort,
+          targetType,
+          target,
           hasSsl,
           enabled,
           subRoutes,
@@ -143,7 +157,7 @@ export const nginxService = {
     return results;
   },
 
-  async createDomainProxy(domain: string, targetPort: number): Promise<void> {
+  async createOrUpdateDomain(domain: string, targetType: 'port' | 'path', target: string): Promise<void> {
     await this.ensureDefaultIpProxy(3000);
 
     const cleanDomain = domain.trim().toLowerCase();
@@ -156,12 +170,11 @@ export const nginxService = {
     const isSubdomain = cleanDomain.split('.').length > 2;
     const serverNames = isSubdomain ? cleanDomain : `${cleanDomain} www.${cleanDomain}`;
 
-    const configContent = `server {
-    listen 80;
-    server_name ${serverNames};
-
+    let rootBlock = '';
+    if (targetType === 'port') {
+      rootBlock = `
     location / {
-        proxy_pass http://127.0.0.1:${targetPort};
+        proxy_pass http://127.0.0.1:${target};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -170,12 +183,36 @@ export const nginxService = {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }`;
+    } else {
+      const absPath = resolveSafePath(target);
+      rootBlock = `
+    location / {
+        root ${absPath};
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }`;
     }
-}
-`;
 
     const confFile = path.join(availableDir, `${cleanDomain}.conf`);
     const symlinkFile = path.join(enabledDir, `${cleanDomain}.conf`);
+
+    let existingContent = '';
+    try {
+      existingContent = await fs.readFile(confFile, 'utf-8');
+    } catch {}
+
+    let configContent = '';
+    if (existingContent) {
+      configContent = existingContent.replace(/location\s+\/\s*\{[\s\S]*?\n\s*\}/, rootBlock.trim());
+    } else {
+      configContent = `server {
+    listen 80;
+    server_name ${serverNames};
+${rootBlock}
+}
+`;
+    }
 
     await fs.writeFile(confFile, configContent, 'utf-8');
 
@@ -187,7 +224,7 @@ export const nginxService = {
     await execAsync('nginx -t && systemctl reload nginx');
   },
 
-  async addSubRoute(domain: string, routePath: string, targetPort: number): Promise<void> {
+  async addSubRoute(domain: string, routePath: string, targetType: 'port' | 'path', target: string): Promise<void> {
     const cleanDomain = domain.trim().toLowerCase();
     let sanitizedPath = routePath.trim();
     if (!sanitizedPath.startsWith('/')) sanitizedPath = '/' + sanitizedPath;
@@ -196,10 +233,14 @@ export const nginxService = {
     const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
     let content = await fs.readFile(confFile, 'utf-8');
 
-    const locationBlock = `
+    let routeBlock = '';
+    if (targetType === 'port') {
+      routeBlock = `
     # ROUTE_START:${sanitizedPath}
+    # TYPE:port
+    # TARGET:${target}
     location ^~ ${sanitizedPath}/ {
-        proxy_pass http://127.0.0.1:${targetPort}/;
+        proxy_pass http://127.0.0.1:${target}/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -215,16 +256,34 @@ export const nginxService = {
     }
     # ROUTE_END:${sanitizedPath}
 `;
+    } else {
+      const absPath = resolveSafePath(target);
+      routeBlock = `
+    # ROUTE_START:${sanitizedPath}
+    # TYPE:path
+    # TARGET:${target}
+    location ^~ ${sanitizedPath}/ {
+        alias ${absPath}/;
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html =404;
+    }
+
+    location = ${sanitizedPath} {
+        return 301 ${sanitizedPath}/;
+    }
+    # ROUTE_END:${sanitizedPath}
+`;
+    }
 
     const cleanRegex = new RegExp(`\\s*# ROUTE_START:${sanitizedPath}[\\s\\S]*?# ROUTE_END:${sanitizedPath}`, 'g');
     content = content.replace(cleanRegex, '');
 
     const insertIndex = content.indexOf('location / {');
     if (insertIndex !== -1) {
-      content = content.slice(0, insertIndex) + locationBlock + '\n    ' + content.slice(insertIndex);
+      content = content.slice(0, insertIndex) + routeBlock + '\n    ' + content.slice(insertIndex);
     } else {
       const lastBrace = content.lastIndexOf('}');
-      content = content.slice(0, lastBrace) + locationBlock + '\n' + content.slice(lastBrace);
+      content = content.slice(0, lastBrace) + routeBlock + '\n' + content.slice(lastBrace);
     }
 
     await fs.writeFile(confFile, content, 'utf-8');
