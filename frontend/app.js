@@ -2,13 +2,13 @@ const container = document.getElementById('view-container');
 let currentUser = null;
 
 const viewLoaders = {
-  files: () => import('./views/files.js').then((m) => m.renderFiles),
-  terminal: () => import('./views/terminal.js').then((m) => m.renderTerminal),
-  domains: () => import('./views/domains.js').then((m) => m.renderDomains),
-  notebooks: () => import('./views/notebooks.js').then((m) => m.renderNotebooks),
-  ftp: () => import('./views/ftp.js').then((m) => m.renderFTP),
-  s3: () => import('./views/s3.js').then((m) => m.renderS3),
-  changelog: () => import('./views/changelog.js').then((m) => m.renderChangelog),
+  files: () => import('/views/files.js').then((m) => m.renderFiles),
+  terminal: () => import('/views/terminal.js').then((m) => m.renderTerminal),
+  domains: () => import('/views/domains.js').then((m) => m.renderDomains),
+  notebooks: () => import('/views/notebooks.js').then((m) => m.renderNotebooks),
+  ftp: () => import('/views/ftp.js').then((m) => m.renderFTP),
+  s3: () => import('/views/s3.js').then((m) => m.renderS3),
+  changelog: () => import('/views/changelog.js').then((m) => m.renderChangelog),
 };
 
 let toastTimer = null;
@@ -38,7 +38,7 @@ window.closeModal = function (id) {
   document.getElementById(id)?.classList.remove('active');
 };
 
-window.navigate = async function (viewName, pushState = true) {
+window.navigate = async function (viewName, pushState = true, initialSubPath = '') {
   if (!currentUser) return;
   const targetView = viewLoaders[viewName] ? viewName : 'files';
 
@@ -51,7 +51,8 @@ window.navigate = async function (viewName, pushState = true) {
   }
 
   if (pushState && window.location.pathname.replace(/^\/+/, '') !== targetView) {
-    window.history.pushState({ view: targetView }, '', `/${targetView}`);
+    const nextUrl = targetView === 'files' && initialSubPath ? `/files/${initialSubPath}` : `/${targetView}`;
+    window.history.pushState({ view: targetView, dir: initialSubPath }, '', nextUrl);
   }
 
   if (container) {
@@ -59,7 +60,7 @@ window.navigate = async function (viewName, pushState = true) {
     try {
       const renderFn = await viewLoaders[targetView]();
       container.innerHTML = '';
-      await renderFn(container);
+      await renderFn(container, initialSubPath);
     } catch (err) {
       container.innerHTML = `<div class="panel-box" style="color:#ef4444;"><h4>Error al cargar el módulo ${targetView}</h4><p>${err.message}</p></div>`;
     }
@@ -68,8 +69,9 @@ window.navigate = async function (viewName, pushState = true) {
 
 window.addEventListener('popstate', (event) => {
   if (!currentUser) return;
-  const targetView = event.state?.view || window.location.pathname.replace(/^\/+/, '') || 'files';
-  window.navigate(targetView, false);
+  const targetView = event.state?.view || window.location.pathname.replace(/^\/+/, '').split('/')[0] || 'files';
+  const subDir = event.state?.dir || (window.location.pathname.startsWith('/files/') ? window.location.pathname.replace(/^\/files\//, '') : '');
+  window.navigate(targetView, false, subDir);
 });
 
 window.logout = async function () {
@@ -171,9 +173,12 @@ async function init() {
   if (sidebar) sidebar.style.display = 'flex';
   if (uEmail) uEmail.innerText = currentUser.username;
 
-  const currentPath = window.location.pathname.replace(/^\/+/, '');
-  const initialRoute = currentPath.split('/')[0] || 'files';
-  window.navigate(viewLoaders[initialRoute] ? initialRoute : 'files', false);
+  const rawPath = window.location.pathname.replace(/^\/+/, '');
+  const segments = rawPath.split('/');
+  const initialSection = segments[0] || 'files';
+  const initialSubPath = initialSection === 'files' && segments.length > 1 ? segments.slice(1).join('/') : '';
+
+  window.navigate(viewLoaders[initialSection] ? initialSection : 'files', false, initialSubPath);
 }
 
 window.onload = init;
