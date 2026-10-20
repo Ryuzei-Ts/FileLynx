@@ -96,13 +96,17 @@ async function executeSystemUpdate(tokenOverride = '') {
 
     if (data.success) {
       window.showToast?.(data.message || 'Actualización completada ꕤ');
-      loadRemoteChangelog();
-      checkRemoteGithub();
+      setTimeout(() => {
+        window.location.reload();
+      }, 2500);
     } else {
       alert(`Error al actualizar: ${data.error}`);
     }
   } catch {
-    window.showToast?.('Error al conectar con la API de actualización');
+    window.showToast?.('Servidor reiniciando tras actualizar ✰');
+    setTimeout(() => {
+      window.location.reload();
+    }, 2500);
   } finally {
     if (pullBtn) {
       pullBtn.disabled = false;
