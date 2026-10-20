@@ -57,7 +57,7 @@ export const nginxService = {
       const isFree = await checkPort(p);
       if (isFree) return p;
     }
-    return 3000;
+    return 3100;
   },
 
   async ensureDefaultIpProxy(targetPort: number = 3000): Promise<void> {
@@ -106,7 +106,6 @@ export const nginxService = {
 
         await fs.symlink(defaultAvailable, defaultEnabled);
         await execAsync('nginx -t && systemctl reload nginx');
-        logger.info(`Nginx default proxy configurado al puerto ${targetPort}`);
       }
     } catch (err: any) {
       logger.warn('No se pudo auto-configurar Nginx default proxy:', err.message);
@@ -134,7 +133,7 @@ export const nginxService = {
         let target = '3000';
 
         const rootPortMatch = content.match(/location\s+\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+);/);
-        const rootPathMatch = content.match(/location\s+\/\s*\{[^}]*(?:root|alias)\s+([^;]+);/);
+        const rootPathMatch = content.match(/# Carpeta física vinculada: ([^\n]+)/);
 
         if (rootPortMatch && rootPortMatch[1]) {
           targetType = 'port';
@@ -152,24 +151,13 @@ export const nginxService = {
           enabled = true;
         } catch {}
 
-        const subRoutes: SubRoute[] = [];
-        const locationRegex = /# ROUTE_START:([^\n]+)\n\s*# TYPE:([^\n]+)\n\s*# TARGET:([^\n]+)/g;
-        let match;
-        while ((match = locationRegex.exec(content)) !== null) {
-          subRoutes.push({
-            path: match[1].trim(),
-            type: match[2].trim() as 'port' | 'path',
-            target: match[3].trim(),
-          });
-        }
-
         results.push({
           domain,
           targetType,
           target: target || '3000',
           hasSsl,
           enabled,
-          subRoutes,
+          subRoutes: [],
         });
       }
     } catch {}
@@ -177,7 +165,7 @@ export const nginxService = {
     return results;
   },
 
-  async createOrUpdateDomain(domain: string, targetType: 'port' | 'path', target: string): Promise<void> {
+  async createOrUpdateDomain(domain: string, targetType: 'port' | 'path', target: string): Promise<string> {
     await this.ensureDefaultIpProxy(3000);
 
     const cleanDomain = domain.trim().toLowerCase();
@@ -190,8 +178,25 @@ export const nginxService = {
     const isSubdomain = cleanDomain.split('.').length > 2;
     const serverNames = isSubdomain ? cleanDomain : `${cleanDomain} www.${cleanDomain}`;
 
+    let assignedPort = target;
     let rootBlock = '';
-    if (targetType === 'port') {
+
+    if (targetType === 'path') {
+      assignedPort = String(await this.getAvailablePort(3100, 9999));
+      rootBlock = `
+    # Carpeta física vinculada: ${resolveSafePath(target)}
+    location / {
+        proxy_pass http://127.0.0.1:${assignedPort};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }`;
+    } else {
       rootBlock = `
     location / {
         proxy_pass http://127.0.0.1:${target};
@@ -203,14 +208,6 @@ export const nginxService = {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }`;
-    } else {
-      const absPath = resolveSafePath(target);
-      rootBlock = `
-    location / {
-        root ${absPath};
-        index index.html index.htm;
-        try_files $uri $uri/ /index.html;
     }`;
     }
 
@@ -224,7 +221,7 @@ export const nginxService = {
 
     let configContent = '';
     if (existingContent && existingContent.includes('location / {')) {
-      configContent = existingContent.replace(/location\s+\/\s*\{[\s\S]*?\n\s*\}/, rootBlock.trim());
+      configContent = existingContent.replace(/server\s*\{[\s\S]*?\}/, `server {\n    listen 80;\n    server_name ${serverNames};\n${rootBlock}\n}`);
     } else {
       configContent = `server {
     listen 80;
@@ -242,9 +239,11 @@ ${rootBlock}
 
     await fs.symlink(confFile, symlinkFile);
     await execAsync('nginx -t && systemctl reload nginx');
+
+    return String(assignedPort);
   },
 
-  async addSubRoute(domain: string, routePath: string, targetType: 'port' | 'path', target: string): Promise<void> {
+  async addSubRoute(domain: string, routePath: string, targetType: 'port' | 'path', target: string): Promise<string> {
     const cleanDomain = domain.trim().toLowerCase();
     let sanitizedPath = routePath.trim();
     if (!sanitizedPath.startsWith('/')) sanitizedPath = '/' + sanitizedPath;
@@ -253,14 +252,17 @@ ${rootBlock}
     const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
     let content = await fs.readFile(confFile, 'utf-8');
 
-    let routeBlock = '';
-    if (targetType === 'port') {
-      routeBlock = `
+    let assignedPort = target;
+    if (targetType === 'path') {
+      assignedPort = String(await this.getAvailablePort(3100, 9999));
+    }
+
+    const routeBlock = `
     # ROUTE_START:${sanitizedPath}
     # TYPE:port
-    # TARGET:${target}
+    # TARGET:${assignedPort}
     location ^~ ${sanitizedPath}/ {
-        proxy_pass http://127.0.0.1:${target}/;
+        proxy_pass http://127.0.0.1:${assignedPort}/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -276,24 +278,6 @@ ${rootBlock}
     }
     # ROUTE_END:${sanitizedPath}
 `;
-    } else {
-      const absPath = resolveSafePath(target);
-      routeBlock = `
-    # ROUTE_START:${sanitizedPath}
-    # TYPE:path
-    # TARGET:${target}
-    location ^~ ${sanitizedPath}/ {
-        alias ${absPath}/;
-        index index.html index.htm;
-        try_files $uri $uri/ /index.html =404;
-    }
-
-    location = ${sanitizedPath} {
-        return 301 ${sanitizedPath}/;
-    }
-    # ROUTE_END:${sanitizedPath}
-`;
-    }
 
     const cleanRegex = new RegExp(`\\s*# ROUTE_START:${sanitizedPath}[\\s\\S]*?# ROUTE_END:${sanitizedPath}`, 'g');
     content = content.replace(cleanRegex, '');
@@ -308,6 +292,8 @@ ${rootBlock}
 
     await fs.writeFile(confFile, content, 'utf-8');
     await execAsync('nginx -t && systemctl reload nginx');
+
+    return String(assignedPort);
   },
 
   async removeSubRoute(domain: string, routePath: string): Promise<void> {
