@@ -17,44 +17,35 @@ router.get('/list', async (_req: Request, res: Response): Promise<void> => {
   }
 });
 
-router.post('/create', async (req: Request, res: Response): Promise<void> => {
+router.post('/save-domain-route', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { domain, targetPort = 3000, email, autoSsl } = req.body;
-    if (!domain) {
-      res.status(400).json({ error: 'Debes indicar un dominio válido.' });
+    const { domain, isSubRoute, routePath, targetType, target, email, autoSsl } = req.body;
+    if (!domain || !target) {
+      res.status(400).json({ error: 'Debes especificar el dominio y el destino (puerto o ruta).' });
       return;
     }
 
-    await nginxService.createDomainProxy(domain, Number(targetPort) || 3000);
-
-    let sslOutput = '';
-    if (autoSsl) {
-      try {
-        sslOutput = await nginxService.issueSsl(domain, email);
-      } catch (sslErr: any) {
-        res.json({
-          success: true,
-          warning: 'Proxy Nginx creado pero falló Certbot SSL: ' + sslErr.message,
-        });
+    if (isSubRoute) {
+      if (!routePath) {
+        res.status(400).json({ error: 'Debes ingresar la subruta (ej. /files/database).' });
         return;
+      }
+      await nginxService.addSubRoute(domain, routePath, targetType, target);
+    } else {
+      await nginxService.createOrUpdateDomain(domain, targetType, target);
+      if (autoSsl) {
+        try {
+          await nginxService.issueSsl(domain, email);
+        } catch (sslErr: any) {
+          res.json({
+            success: true,
+            warning: 'Nginx configurado pero Certbot SSL tuvo un aviso: ' + sslErr.message,
+          });
+          return;
+        }
       }
     }
 
-    res.json({ success: true, sslOutput });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/add-route', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { domain, routePath, targetPort } = req.body;
-    if (!domain || !routePath || !targetPort) {
-      res.status(400).json({ error: 'Dominio, subruta y puerto destino requeridos.' });
-      return;
-    }
-
-    await nginxService.addSubRoute(domain, routePath, Number(targetPort));
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
