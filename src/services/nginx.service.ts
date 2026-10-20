@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import net from 'node:net';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { logger } from '#utils/logger';
@@ -38,6 +39,25 @@ export const nginxService = {
     } catch {
       return false;
     }
+  },
+
+  async getAvailablePort(startPort: number = 3100, maxPort: number = 9999): Promise<number> {
+    function checkPort(port: number): Promise<boolean> {
+      return new Promise((resolve) => {
+        const server = net.createServer();
+        server.unref();
+        server.on('error', () => resolve(false));
+        server.listen(port, '127.0.0.1', () => {
+          server.close(() => resolve(true));
+        });
+      });
+    }
+
+    for (let p = startPort; p <= maxPort; p++) {
+      const isFree = await checkPort(p);
+      if (isFree) return p;
+    }
+    return 3000;
   },
 
   async ensureDefaultIpProxy(targetPort: number = 3000): Promise<void> {
@@ -116,10 +136,10 @@ export const nginxService = {
         const rootPortMatch = content.match(/location\s+\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+);/);
         const rootPathMatch = content.match(/location\s+\/\s*\{[^}]*(?:root|alias)\s+([^;]+);/);
 
-        if (rootPortMatch) {
+        if (rootPortMatch && rootPortMatch[1]) {
           targetType = 'port';
           target = rootPortMatch[1];
-        } else if (rootPathMatch) {
+        } else if (rootPathMatch && rootPathMatch[1]) {
           targetType = 'path';
           target = rootPathMatch[1].trim();
         }
@@ -146,7 +166,7 @@ export const nginxService = {
         results.push({
           domain,
           targetType,
-          target,
+          target: target || '3000',
           hasSsl,
           enabled,
           subRoutes,
@@ -203,7 +223,7 @@ export const nginxService = {
     } catch {}
 
     let configContent = '';
-    if (existingContent) {
+    if (existingContent && existingContent.includes('location / {')) {
       configContent = existingContent.replace(/location\s+\/\s*\{[\s\S]*?\n\s*\}/, rootBlock.trim());
     } else {
       configContent = `server {
