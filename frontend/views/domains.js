@@ -11,7 +11,6 @@ export async function renderDomains(container) {
         <button class="stat-btn" id="btnRefreshDomains"><i class="fas fa-sync-alt"></i> Recargar</button>
       </div>
 
-      <!-- Guía DNS -->
       <div class="panel-box" style="background:var(--bg-params); border:1px solid var(--border); margin-bottom:18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="toggleDnsGuideHeader">
           <div style="display:flex; align-items:center; gap:8px;">
@@ -41,7 +40,6 @@ export async function renderDomains(container) {
         </div>
       </div>
 
-      <!-- Vincular Dominio Principal -->
       <div class="panel-box" style="border:1.5px dashed var(--primary); background:rgba(37,99,235,0.02); margin-bottom:20px;">
         <h4 style="font-size:1rem; font-weight:800; margin-bottom:12px;">Vincular Nuevo Dominio (Raíz /)</h4>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:12px;">
@@ -69,7 +67,6 @@ export async function renderDomains(container) {
         </button>
       </div>
 
-      <!-- Vincular Subruta a Puerto -->
       <div class="panel-box" style="border:1.5px dashed var(--price-color); background:rgba(245,158,11,0.02); margin-bottom:20px;">
         <h4 style="font-size:1rem; font-weight:800; margin-bottom:12px;"><i class="fas fa-link" style="color:var(--price-color);"></i> Vincular Subruta a un Puerto</h4>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:12px;">
@@ -92,7 +89,6 @@ export async function renderDomains(container) {
         </button>
       </div>
 
-      <!-- Lista de Dominios y Subrutas -->
       <div class="panel-box">
         <h4 style="font-size:1rem; font-weight:800; margin-bottom:12px;">Dominios & Subrutas Configurados</h4>
         <div id="domainsListContainer">Cargando dominios...</div>
@@ -145,9 +141,15 @@ async function loadDomainList() {
     currentLoadedDomains = data.domains || [];
 
     if (domainSelect) {
-      domainSelect.innerHTML = currentLoadedDomains.length === 0
-        ? '<option value="">No hay dominios creados</option>'
-        : currentLoadedDomains.map((d) => `<option value="${d.domain}">${d.domain}</option>`).join('');
+      if (currentLoadedDomains.length === 0) {
+        domainSelect.innerHTML = '<option value="">No hay dominios creados</option>';
+      } else {
+        let options = '';
+        for (let i = 0; i < currentLoadedDomains.length; i++) {
+          options += '<option value="' + currentLoadedDomains[i].domain + '">' + currentLoadedDomains[i].domain + '</option>';
+        }
+        domainSelect.innerHTML = options;
+      }
     }
 
     if (currentLoadedDomains.length === 0) {
@@ -163,25 +165,30 @@ async function loadDomainList() {
         : '<span style="font-size:0.7rem; background:#64748b; color:#fff; padding:2px 6px; border-radius:4px; font-weight:800;">HTTP</span>';
 
       const sslBtn = !d.hasSsl
-        ? `<button class="stat-btn btn-issue-ssl" data-domain="${d.domain}"><i class="fas fa-lock"></i> Activar SSL</button>`
+        ? '<button class="stat-btn btn-issue-ssl" data-domain="' + d.domain + '"><i class="fas fa-lock"></i> Activar SSL</button>'
         : '';
 
       let subRoutesListHtml = '';
       if (d.subRoutes && d.subRoutes.length > 0) {
+        let subItems = '';
+        for (let j = 0; j < d.subRoutes.length; j++) {
+          const r = d.subRoutes[j];
+          subItems += `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
+              <div>
+                <code>https://${d.domain}${r.path}</code> &rarr; <b>Puerto ${r.targetPort}</b>
+              </div>
+              <button class="stat-btn btn-remove-subroute" style="color:#ef4444; padding:2px 6px; font-size:0.7rem;" data-domain="${d.domain}" data-path="${r.path}">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          `;
+        }
         subRoutesListHtml = `
           <div style="margin-top:10px; padding:8px 12px; background:var(--bg-params); border-radius:8px; border:1px solid var(--border);">
             <span style="font-size:0.72rem; font-weight:800; color:var(--text-gray); text-transform:uppercase;">Subrutas conectadas:</span>
             <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
-              ${d.subRoutes.map((r) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
-                  <div>
-                    <code>https://${d.domain}${r.path}</code> &rarr; <b>Puerto${r.targetPort}</b>
-                  </div>
-                  <button class="stat-btn btn-remove-subroute" style="color:#ef4444; padding:2px 6px; font-size:0.7rem;" data-domain="${d.domain}" data-path="${r.path}">
-                    <i class="fas fa-times"></i>
-                  </button>
-                </div>
-              `).join('')}
+              ${subItems}
             </div>
           </div>
         `;
@@ -220,7 +227,7 @@ async function loadDomainList() {
     container.querySelectorAll('.btn-remove-subroute').forEach((b) => {
       b.onclick = () => removeSubRoute(b.getAttribute('data-domain'), b.getAttribute('data-path'));
     });
-  } catch (err: any) {
+  } catch (err) {
     container.innerHTML = `<p style="color:#ef4444; padding:10px;">Error: ${err.message}</p>`;
   }
 }
