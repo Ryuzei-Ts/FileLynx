@@ -117,7 +117,7 @@ app.use('/api/nginx', nginxRouter);
 app.get(['/files/*', '/:section'], (req: Request, res: Response, next: NextFunction) => {
   const section = req.params.section || (req.path.startsWith('/files') ? 'files' : '');
 
-  if (section === 'api' || section === 'public' || section.includes('.')) {
+  if (req.path.startsWith('/api') || section === 'api' || section === 'public' || req.path.includes('.')) {
     return next();
   }
 
@@ -129,8 +129,12 @@ app.get(['/files/*', '/:section'], (req: Request, res: Response, next: NextFunct
   next();
 });
 
+app.use('/api/*', (_req: Request, res: Response) => {
+  res.status(404).json({ error: 'Endpoint de API no encontrado' });
+});
+
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   const msg = err instanceof Error ? err.message : 'Error interno del servidor';
-  logger.error(`[Error en ${req.method} ${req.url}]:`, msg);
+  logger.error(`[Error en ${req.method}${req.url}]:`, msg);
   res.status(500).json({ error: 'Ocurrió un error en el servidor.' });
 });
