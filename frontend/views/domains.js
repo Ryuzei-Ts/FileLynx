@@ -1,6 +1,23 @@
 let currentLoadedDomains = [];
 let filePickerCurrentDir = '';
 
+function showAppDialog(title, message, isError = false) {
+  const modal = document.getElementById('modalAppAlert');
+  if (!modal) {
+    alert(title + ':\n' + message);
+    return;
+  }
+  document.getElementById('modalAlertTitle').innerText = title;
+  document.getElementById('modalAlertMessage').innerText = message;
+  const icon = document.getElementById('modalAlertIcon');
+  if (isError) {
+    icon.innerHTML = '<i class="fas fa-exclamation-circle" style="color:#ef4444;"></i>';
+  } else {
+    icon.innerHTML = '<i class="fas fa-info-circle" style="color:var(--primary);"></i>';
+  }
+  modal.classList.add('active');
+}
+
 export async function renderDomains(container) {
   container.innerHTML = `
     <div class="panel-box" style="padding: 24px; margin-bottom: 24px;">
@@ -88,8 +105,13 @@ export async function renderDomains(container) {
           </div>
 
           <div id="portTargetWrapper">
-            <label class="param-label">Puerto interno (ej. 3000, 8080, 5000)</label>
-            <input type="number" id="targetPortInput" class="param-input" value="3000" placeholder="3000" />
+            <label class="param-label">Puerto interno</label>
+            <div style="display:flex; gap:8px;">
+              <input type="number" id="targetPortInput" class="param-input" value="3000" placeholder="3000" style="flex:1;" />
+              <button class="stat-btn" id="btnFindFreePort" type="button" style="white-space:nowrap;">
+                <i class="fas fa-dice"></i> Puerto Libre Random
+              </button>
+            </div>
           </div>
 
           <div id="pathTargetWrapper" style="display:none;">
@@ -140,7 +162,6 @@ export async function renderDomains(container) {
           <button class="stat-btn" onclick="document.getElementById('modalFilePicker').classList.remove('active')">✕</button>
         </div>
 
-        <!-- Barra de navegación y migas de pan -->
         <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
           <button class="stat-btn" id="btnFilePickerUp" title="Subir de nivel">
             <i class="fas fa-arrow-up"></i>
@@ -148,7 +169,6 @@ export async function renderDomains(container) {
           <input type="text" id="filePickerPathDisplay" class="param-input" readonly style="flex:1; font-family:monospace; font-size:0.82rem;" />
         </div>
 
-        <!-- Lista de carpetas navegables -->
         <div id="filePickerEntries" style="height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:12px; padding:6px; background:var(--bg-params); margin-bottom:16px;">
           Cargando carpetas...
         </div>
@@ -178,6 +198,7 @@ export async function renderDomains(container) {
   const domainInput = document.getElementById('targetDomainInput');
   const domainSelect = document.getElementById('quickSelectDomain');
   const btnPickPath = document.getElementById('btnPickServerPath');
+  const btnFreePort = document.getElementById('btnFindFreePort');
 
   if (guideHeader && guideBody && chevron) {
     guideHeader.onclick = () => {
@@ -206,6 +227,24 @@ export async function renderDomains(container) {
       domainInput.value = domainSelect.value;
     }
   };
+
+  if (btnFreePort) {
+    btnFreePort.onclick = async () => {
+      btnFreePort.disabled = true;
+      try {
+        const res = await fetch('/api/nginx/free-port');
+        const data = await res.json();
+        if (data.port) {
+          document.getElementById('targetPortInput').value = data.port;
+          window.showToast?.(`Puerto libre encontrado: ${data.port} ✰`);
+        }
+      } catch {
+        window.showToast?.('No se pudo buscar puerto libre');
+      } finally {
+        btnFreePort.disabled = false;
+      }
+    };
+  }
 
   btnPickPath.onclick = () => openFilePicker('');
 
@@ -411,8 +450,17 @@ async function handleSaveConfiguration() {
   const targetTypeRadio = document.querySelector('input[name="targetTypeRadio"]:checked');
   const targetType = targetTypeRadio ? targetTypeRadio.value : 'port';
 
-  const portVal = document.getElementById('targetPortInput').value.trim();
+  let portVal = document.getElementById('targetPortInput').value.trim();
   const pathVal = document.getElementById('targetPathInput').value.trim();
+
+  if (targetType === 'path' && !portVal) {
+    try {
+      const freeRes = await fetch('/api/nginx/free-port');
+      const freeData = await freeRes.json();
+      if (freeData.port) portVal = String(freeData.port);
+    } catch {}
+  }
+
   const target = targetType === 'port' ? portVal : pathVal;
 
   const autoSsl = document.getElementById('autoSslCheck').checked;
@@ -420,21 +468,21 @@ async function handleSaveConfiguration() {
   const btn = document.getElementById('btnSaveConfig');
 
   if (!domain) {
-    window.showToast?.('Ingresa o selecciona un dominio');
+    showAppDialog('Campo Requerido', 'Ingresa o selecciona un dominio para continuar.', true);
     return;
   }
   if (!target) {
-    window.showToast?.(targetType === 'port' ? 'Ingresa el puerto en VPS' : 'Ingresa o selecciona la ruta del servidor');
+    showAppDialog('Destino Requerido', targetType === 'port' ? 'Ingresa el puerto interno de la VPS' : 'Selecciona una carpeta o archivo del servidor con el botón "Elegir del Servidor".', true);
     return;
   }
   if (isSubRoute && !routePath) {
-    window.showToast?.('Ingresa la subruta (ej. /files/database)');
+    showAppDialog('Subruta Requerida', 'Debes ingresar la subruta (ejemplo: /files/database)', true);
     return;
   }
 
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Configurando Nginx...';
-  window.showToast?.('Configurando Nginx...');
+  window.showToast?.('Aplicando configuración en el servidor...');
 
   try {
     const res = await fetch('/api/nginx/save-domain-route', {
@@ -452,18 +500,18 @@ async function handleSaveConfiguration() {
     });
 
     const data = await res.json();
-    if (data.success) {
+    if (res.ok && data.success) {
       if (data.warning) {
-        alert(data.warning);
+        showAppDialog('Aviso de Configuración', data.warning, false);
       } else {
         window.showToast?.('Configuración guardada y aplicada en Nginx ✰');
       }
       loadDomainList();
     } else {
-      alert('Error: ' + data.error);
+      showAppDialog('Error al Configurar Nginx', data.error || 'Ocurrió un error al escribir la configuración.', true);
     }
-  } catch {
-    window.showToast?.('Fallo de conexión al configurar Nginx');
+  } catch (networkErr: any) {
+    showAppDialog('Fallo al Comunicar con Nginx', networkErr.message || 'El servidor tardó demasiado en responder.', true);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> Guardar y Aplicar en Nginx';
@@ -484,7 +532,7 @@ async function removeSubRoute(domain, routePath) {
       window.showToast?.('Subruta eliminada exitosamente');
       loadDomainList();
     } else {
-      alert(`Error: ${data.error}`);
+      showAppDialog('Error', data.error || 'No se pudo eliminar la subruta', true);
     }
   } catch {
     window.showToast?.('Fallo al eliminar subruta');
@@ -507,10 +555,10 @@ async function issueSslForDomain(domain) {
       window.showToast?.('Certificado SSL instalado correctamente ꕤ');
       loadDomainList();
     } else {
-      alert(d.error || 'Fallo en Certbot');
+      showAppDialog('Fallo en Certbot SSL', d.error || 'Error al emitir certificado.', true);
     }
-  } catch {
-    window.showToast?.('Error de red al generar certificado SSL');
+  } catch (err: any) {
+    showAppDialog('Error de Red', err.message || 'No se pudo contactar al servidor para emitir el certificado.', true);
   }
 }
 
@@ -521,7 +569,7 @@ async function deleteDomainConfig(domain) {
     await fetch(`/api/nginx/delete?domain=${encodeURIComponent(domain)}`, { method: 'DELETE' });
     window.showToast?.('Dominio eliminado de Nginx');
     loadDomainList();
-  } catch {
-    window.showToast?.('Error al eliminar dominio');
+  } catch (err: any) {
+    showAppDialog('Error', err.message || 'Error al eliminar dominio', true);
   }
 }
