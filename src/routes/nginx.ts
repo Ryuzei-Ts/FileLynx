@@ -13,7 +13,16 @@ router.get('/list', async (_req: Request, res: Response): Promise<void> => {
     const domains = await nginxService.listDomains();
     res.json({ installed: true, domains });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Error al listar dominios' });
+  }
+});
+
+router.get('/free-port', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const port = await nginxService.getAvailablePort();
+    res.json({ port });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, port: 3100 });
   }
 });
 
@@ -21,13 +30,13 @@ router.post('/save-domain-route', async (req: Request, res: Response): Promise<v
   try {
     const { domain, isSubRoute, routePath, targetType, target, email, autoSsl } = req.body;
     if (!domain || !target) {
-      res.status(400).json({ error: 'Debes especificar el dominio y el destino (puerto o ruta).' });
+      res.status(400).json({ error: 'Debes indicar el dominio y el puerto/carpeta de destino.' });
       return;
     }
 
     if (isSubRoute) {
       if (!routePath) {
-        res.status(400).json({ error: 'Debes ingresar la subruta (ej. /files/database).' });
+        res.status(400).json({ error: 'Debes indicar la subruta URL (ej. /files/database).' });
         return;
       }
       await nginxService.addSubRoute(domain, routePath, targetType, target);
@@ -39,7 +48,7 @@ router.post('/save-domain-route', async (req: Request, res: Response): Promise<v
         } catch (sslErr: any) {
           res.json({
             success: true,
-            warning: 'Nginx configurado pero Certbot SSL tuvo un aviso: ' + sslErr.message,
+            warning: 'Nginx guardado pero Certbot SSL arrojó un error:\n' + sslErr.message,
           });
           return;
         }
@@ -48,7 +57,7 @@ router.post('/save-domain-route', async (req: Request, res: Response): Promise<v
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Error al guardar la configuración en Nginx' });
   }
 });
 
