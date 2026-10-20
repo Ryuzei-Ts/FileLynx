@@ -1,337 +1,263 @@
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { logger } from '#utils/logger';
 import { resolveSafePath } from '#utils/paths';
+import type { FileEntry } from '#types';
 
 const execAsync = promisify(exec);
 
-export interface SubRoute {
-  path: string;
-  type: 'port' | 'path';
-  target: string;
-}
+export const filesService = {
+  async list(relativeDirectory: string = ''): Promise<(FileEntry & { hasGit?: boolean; isArchive?: boolean })[]> {
+    const targetDir = resolveSafePath(relativeDirectory);
+    const dirents = await fs.readdir(targetDir, { withFileTypes: true });
 
-export interface DomainSite {
-  domain: string;
-  targetType: 'port' | 'path';
-  target: string;
-  hasSsl: boolean;
-  enabled: boolean;
-  subRoutes: SubRoute[];
-}
+    const entries = await Promise.all(
+      dirents.map(async (entry) => {
+        const fullPath = path.join(targetDir, entry.name);
+        const stats = await fs.stat(fullPath);
+        let hasGit = false;
 
-export const nginxService = {
-  getSitesAvailableDir(): string {
-    return '/etc/nginx/sites-available';
+        if (entry.isDirectory()) {
+          try {
+            await fs.access(path.join(fullPath, '.git'));
+            hasGit = true;
+          } catch {
+            hasGit = false;
+          }
+        }
+
+        const ext = entry.isDirectory() ? undefined : path.extname(entry.name).toLowerCase();
+        const isArchive = Boolean(ext && ['.zip', '.tar', '.gz', '.tgz'].includes(ext));
+
+        return {
+          name: entry.name,
+          path: path.posix.join(relativeDirectory, entry.name),
+          size: stats.size,
+          isDirectory: entry.isDirectory(),
+          modifiedAt: stats.mtime,
+          extension: ext,
+          hasGit,
+          isArchive,
+        };
+      })
+    );
+
+    return entries.sort((a, b) => (b.isDirectory ? 1 : 0) - (a.isDirectory ? 1 : 0) || a.name.localeCompare(b.name));
   },
 
-  getSitesEnabledDir(): string {
-    return '/etc/nginx/sites-enabled';
+  async read(relativeFilePath: string): Promise<string> {
+    const safePath = resolveSafePath(relativeFilePath);
+    return fs.readFile(safePath, 'utf-8');
   },
 
-  async isNginxInstalled(): Promise<boolean> {
-    try {
-      await execAsync('which nginx');
-      return true;
-    } catch {
-      return false;
-    }
+  async write(relativeFilePath: string, content: string): Promise<void> {
+    const safePath = resolveSafePath(relativeFilePath);
+    await fs.writeFile(safePath, content, 'utf-8');
   },
 
-  async ensureDefaultIpProxy(targetPort: number = 3000): Promise<void> {
-    const isInstalled = await this.isNginxInstalled();
-    if (!isInstalled) return;
+  async createFile(relativeFilePath: string, content: string = ''): Promise<void> {
+    const safePath = resolveSafePath(relativeFilePath);
+    await fs.writeFile(safePath, content, { flag: 'wx' });
+  },
 
-    const availableDir = this.getSitesAvailableDir();
-    const enabledDir = this.getSitesEnabledDir();
-    const defaultAvailable = path.join(availableDir, 'default');
-    const defaultEnabled = path.join(enabledDir, 'default');
+  async rename(oldRelativePath: string, newRelativePath: string): Promise<void> {
+    const oldSafe = resolveSafePath(oldRelativePath);
+    const newSafe = resolveSafePath(newRelativePath);
+    await fs.rename(oldSafe, newSafe);
+  },
 
-    const defaultConfig = `server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
+  async move(sourcePath: string, destinationDir: string): Promise<void> {
+    const srcSafe = resolveSafePath(sourcePath);
+    const destDirSafe = resolveSafePath(destinationDir);
+    const fileName = path.basename(srcSafe);
+    const targetPath = path.join(destDirSafe, fileName);
+    await fs.rename(srcSafe, targetPath);
+  },
 
-    location / {
-        proxy_pass http://127.0.0.1:${targetPort};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $http_host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-`;
+  async remove(relativeFilePath: string): Promise<void> {
+    const safePath = resolveSafePath(relativeFilePath);
+    await fs.rm(safePath, { recursive: true, force: true });
+  },
 
-    try {
-      await fs.mkdir(availableDir, { recursive: true });
-      await fs.mkdir(enabledDir, { recursive: true });
+  async createDirectory(relativeDirectory: string): Promise<void> {
+    const safePath = resolveSafePath(relativeDirectory);
+    await fs.mkdir(safePath, { recursive: true });
+  },
 
-      let currentContent = '';
+  getDownloadStream(relativeFilePath: string) {
+    const safePath = resolveSafePath(relativeFilePath);
+    return createReadStream(safePath);
+  },
+
+  async compress(sourceRelativePath: string, format: 'zip' | 'tar.gz' = 'zip'): Promise<string> {
+    const safeSrc = resolveSafePath(sourceRelativePath);
+    const parentDir = path.dirname(safeSrc);
+    const baseName = path.basename(safeSrc);
+
+    if (format === 'zip') {
       try {
-        currentContent = await fs.readFile(defaultAvailable, 'utf-8');
+        const archiveName = `${baseName}.zip`;
+        await execAsync(`cd "${parentDir}" && zip -r -q "${archiveName}" "${baseName}"`);
+        return archiveName;
+      } catch (err: any) {
+        const tarName = `${baseName}.tar.gz`;
+        await execAsync(`cd "${parentDir}" && tar -czf "${tarName}" "${baseName}"`);
+        return tarName;
+      }
+    } else {
+      const archiveName = `${baseName}.tar.gz`;
+      await execAsync(`cd "${parentDir}" && tar -czf "${archiveName}" "${baseName}"`);
+      return archiveName;
+    }
+  },
+
+  async extract(archiveRelativePath: string, destinationDir?: string): Promise<void> {
+    const safeArchive = resolveSafePath(archiveRelativePath);
+    const targetDest = destinationDir ? resolveSafePath(destinationDir) : path.dirname(safeArchive);
+    const ext = safeArchive.toLowerCase();
+
+    if (ext.endsWith('.zip')) {
+      try {
+        await execAsync(`unzip -o -q "${safeArchive}" -d "${targetDest}"`);
+      } catch (err: any) {
+        await execAsync(`python3 -c "import zipfile; zipfile.ZipFile('${safeArchive}').extractall('${targetDest}')"`);
+      }
+    } else if (ext.endsWith('.tar.gz') || ext.endsWith('.tgz')) {
+      await execAsync(`tar -xzf "${safeArchive}" -C "${targetDest}"`);
+    } else if (ext.endsWith('.tar')) {
+      await execAsync(`tar -xf "${safeArchive}" -C "${targetDest}"`);
+    } else {
+      throw new Error('Formato no soportado. Usa .zip, .tar.gz o .tar');
+    }
+  },
+
+  async getGitConfigInfo(folderPath: string): Promise<{ remoteUrl: string; branch: string; hasGit: boolean }> {
+    const safeDir = resolveSafePath(folderPath);
+    const configPath = path.join(safeDir, '.git', 'config');
+
+    try {
+      const configData = await fs.readFile(configPath, 'utf-8');
+      const urlMatch = configData.match(/url\s*=\s*(.+)/);
+      let branch = 'main';
+
+      try {
+        const headData = await fs.readFile(path.join(safeDir, '.git', 'HEAD'), 'utf-8');
+        const headMatch = headData.match(/ref:\s*refs\/heads\/(.+)/);
+        if (headMatch) branch = headMatch[1].trim();
       } catch {}
 
-      if (!currentContent.includes(`proxy_pass http://127.0.0.1:${targetPort};`) || !currentContent.includes('default_server')) {
-        await fs.writeFile(defaultAvailable, defaultConfig, 'utf-8');
+      return {
+        hasGit: true,
+        remoteUrl: urlMatch ? urlMatch[1].trim() : '',
+        branch,
+      };
+    } catch {
+      return { hasGit: false, remoteUrl: '', branch: 'main' };
+    }
+  },
 
-        try {
-          await fs.unlink(defaultEnabled);
-        } catch {}
+  // Simulación de terminal interactiva nativa tipo Pterodactyl para git clone con streams
+  async importFromGitHubInteractive(repoUrl: string, targetSubPath: string, username: string, token: string, branch?: string, onLog?: (data: string) => void): Promise<void> {
+    const targetFolder = resolveSafePath(targetSubPath);
+    await fs.mkdir(targetFolder, { recursive: true });
 
-        await fs.symlink(defaultAvailable, defaultEnabled);
-        await execAsync('nginx -t && systemctl reload nginx');
-        logger.info(`Nginx default proxy configurado al puerto ${targetPort}`);
+    let cleanRepo = repoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    cleanRepo = cleanRepo.replace(/^[^@]+@github\.com\//, '').replace(/^github\.com\//, '').replace(/\.git$/, '');
+
+    const parts = cleanRepo.split('/');
+    const owner = parts[0];
+    const repo = parts[1];
+
+    if (!owner || !repo) {
+      throw new Error('Formato de repositorio inválido. Ejemplo: https://github.com/usuario/repositorio');
+    }
+
+    const destinationPath = path.join(targetFolder, repo);
+    const branchArg = branch && branch.trim() ? `--branch ${branch.trim()}` : '';
+    const publicUrl = `https://github.com/${owner}/${repo}.git`;
+
+    try {
+      await fs.rm(destinationPath, { recursive: true, force: true });
+    } catch {}
+
+    return new Promise((resolve, reject) => {
+      const child = spawn('git', ['clone', '--depth', '1', ...(branchArg ? branchArg.split(' ') : []), publicUrl, destinationPath], {
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '1' },
+      });
+
+      let sentUsername = false;
+      let sentPassword = false;
+
+      child.stdout.on('data', (data) => {
+        const str = data.toString();
+        onLog?.(str);
+      });
+
+      child.stderr.on('data', (data) => {
+        const str = data.toString();
+        onLog?.(str);
+
+        if ((str.includes('Username for') || str.includes('Username:')) && !sentUsername && username) {
+          child.stdin.write(username + '\n');
+          sentUsername = true;
+          onLog?.(`[Enviando Username: ${username}]\n`);
+        } else if ((str.includes('Password for') || str.includes('Password:')) && !sentPassword && token) {
+          child.stdin.write(token + '\n');
+          sentPassword = true;
+          onLog?.(`[Enviando Password / Token]\n`);
+        }
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Git clone finalizó con código de error ${code}`));
+        }
+      });
+
+      child.on('error', (err) => {
+        reject(err);
+      });
+    });
+  },
+
+  async gitPull(targetFolder: string, repoUrl?: string, token?: string, branch?: string): Promise<string> {
+    const safeDir = resolveSafePath(targetFolder);
+    const gitInfo = await this.getGitConfigInfo(targetFolder);
+
+    const finalRepoUrl = repoUrl && repoUrl.trim() ? repoUrl.trim() : gitInfo.remoteUrl;
+    const finalBranch = branch && branch.trim() ? branch.trim() : (gitInfo.branch || 'main');
+
+    let setRemoteCmd = '';
+    if (finalRepoUrl) {
+      let clean = finalRepoUrl.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      clean = clean.replace(/^[^@]+@github\.com\//, '').replace(/^github\.com\//, '').replace(/\.git$/, '');
+      const parts = clean.split('/');
+      const owner = parts[parts.length - 2] || 'Ryuzei-Ts';
+      const repo = parts[parts.length - 1] || 'Repo';
+
+      let authRemote = `https://github.com/${owner}/${repo}.git`;
+      if (token && token.trim()) {
+        authRemote = `https://${encodeURIComponent(owner)}:${encodeURIComponent(token.trim())}@github.com/${owner}/${repo}.git`;
       }
+      setRemoteCmd = `git remote set-url origin "${authRemote}" && `;
+    }
+
+    try {
+      const step1 = `cd "${safeDir}" && ${setRemoteCmd}git pull origin "${finalBranch}"`;
+      const { stdout, stderr } = await execAsync(step1);
+      return stdout || stderr;
     } catch (err: any) {
-      logger.warn('No se pudo auto-configurar Nginx default proxy:', err.message);
-    }
-  },
-
-  async listDomains(): Promise<DomainSite[]> {
-    await this.ensureDefaultIpProxy(3000);
-
-    const availableDir = this.getSitesAvailableDir();
-    const enabledDir = this.getSitesEnabledDir();
-    const results: DomainSite[] = [];
-
-    try {
-      const files = await fs.readdir(availableDir);
-
-      for (const file of files) {
-        if (file === 'default' || !file.endsWith('.conf')) continue;
-
-        const domain = file.replace('.conf', '');
-        const filePath = path.join(availableDir, file);
-        const content = await fs.readFile(filePath, 'utf-8');
-
-        let targetType: 'port' | 'path' = 'port';
-        let target = '3000';
-
-        const rootPortMatch = content.match(/location\s+\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+);/);
-        const rootPathMatch = content.match(/location\s+\/\s*\{[^}]*(?:root|alias)\s+([^;]+);/);
-
-        if (rootPortMatch && rootPortMatch[1]) {
-          targetType = 'port';
-          target = rootPortMatch[1];
-        } else if (rootPathMatch && rootPathMatch[1]) {
-          targetType = 'path';
-          target = rootPathMatch[1].trim();
-        }
-
-        const hasSsl = content.includes('ssl_certificate') || content.includes('managed by Certbot');
-
-        let enabled = false;
-        try {
-          await fs.access(path.join(enabledDir, file));
-          enabled = true;
-        } catch {}
-
-        const subRoutes: SubRoute[] = [];
-        const locationRegex = /# ROUTE_START:([^\n]+)\n\s*# TYPE:([^\n]+)\n\s*# TARGET:([^\n]+)/g;
-        let match;
-        while ((match = locationRegex.exec(content)) !== null) {
-          subRoutes.push({
-            path: match[1].trim(),
-            type: match[2].trim() as 'port' | 'path',
-            target: match[3].trim(),
-          });
-        }
-
-        results.push({
-          domain,
-          targetType,
-          target: target || '3000',
-          hasSsl,
-          enabled,
-          subRoutes,
-        });
+      if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed'))) {
+        throw new Error('AUTH_REQUIRED');
       }
-    } catch {}
 
-    return results;
-  },
-
-  async createOrUpdateDomain(domain: string, targetType: 'port' | 'path', target: string): Promise<void> {
-    await this.ensureDefaultIpProxy(3000);
-
-    const cleanDomain = domain.trim().toLowerCase();
-    const availableDir = this.getSitesAvailableDir();
-    const enabledDir = this.getSitesEnabledDir();
-
-    await fs.mkdir(availableDir, { recursive: true });
-    await fs.mkdir(enabledDir, { recursive: true });
-
-    const isSubdomain = cleanDomain.split('.').length > 2;
-    const serverNames = isSubdomain ? cleanDomain : `${cleanDomain} www.${cleanDomain}`;
-
-    let rootBlock = '';
-    if (targetType === 'port') {
-      rootBlock = `
-    location / {
-        proxy_pass http://127.0.0.1:${target};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }`;
-    } else {
-      const absPath = resolveSafePath(target);
-      rootBlock = `
-    location / {
-        root ${absPath};
-        index index.html index.htm;
-        try_files $uri $uri/ /index.html;
-    }`;
+      const step2 = `cd "${safeDir}" && git merge --abort 2>/dev/null || true && git fetch origin "${finalBranch}" && git reset --hard origin/"${finalBranch}"`;
+      const { stdout, stderr } = await execAsync(step2);
+      return stdout || stderr;
     }
-
-    const confFile = path.join(availableDir, `${cleanDomain}.conf`);
-    const symlinkFile = path.join(enabledDir, `${cleanDomain}.conf`);
-
-    let existingContent = '';
-    try {
-      existingContent = await fs.readFile(confFile, 'utf-8');
-    } catch {}
-
-    let configContent = '';
-    if (existingContent && existingContent.includes('location / {')) {
-      configContent = existingContent.replace(/location\s+\/\s*\{[\s\S]*?\n\s*\}/, rootBlock.trim());
-    } else {
-      configContent = `server {
-    listen 80;
-    server_name ${serverNames};
-${rootBlock}
-}
-`;
-    }
-
-    await fs.writeFile(confFile, configContent, 'utf-8');
-
-    try {
-      await fs.unlink(symlinkFile);
-    } catch {}
-
-    await fs.symlink(confFile, symlinkFile);
-    await execAsync('nginx -t && systemctl reload nginx');
-  },
-
-  async addSubRoute(domain: string, routePath: string, targetType: 'port' | 'path', target: string): Promise<void> {
-    const cleanDomain = domain.trim().toLowerCase();
-    let sanitizedPath = routePath.trim();
-    if (!sanitizedPath.startsWith('/')) sanitizedPath = '/' + sanitizedPath;
-    sanitizedPath = sanitizedPath.replace(/\/+$/, '');
-
-    const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
-    let content = await fs.readFile(confFile, 'utf-8');
-
-    let routeBlock = '';
-    if (targetType === 'port') {
-      routeBlock = `
-    # ROUTE_START:${sanitizedPath}
-    # TYPE:port
-    # TARGET:${target}
-    location ^~ ${sanitizedPath}/ {
-        proxy_pass http://127.0.0.1:${target}/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location = ${sanitizedPath} {
-        return 301 ${sanitizedPath}/;
-    }
-    # ROUTE_END:${sanitizedPath}
-`;
-    } else {
-      const absPath = resolveSafePath(target);
-      routeBlock = `
-    # ROUTE_START:${sanitizedPath}
-    # TYPE:path
-    # TARGET:${target}
-    location ^~ ${sanitizedPath}/ {
-        alias ${absPath}/;
-        index index.html index.htm;
-        try_files $uri $uri/ /index.html =404;
-    }
-
-    location = ${sanitizedPath} {
-        return 301 ${sanitizedPath}/;
-    }
-    # ROUTE_END:${sanitizedPath}
-`;
-    }
-
-    const cleanRegex = new RegExp(`\\s*# ROUTE_START:${sanitizedPath}[\\s\\S]*?# ROUTE_END:${sanitizedPath}`, 'g');
-    content = content.replace(cleanRegex, '');
-
-    const insertIndex = content.indexOf('location / {');
-    if (insertIndex !== -1) {
-      content = content.slice(0, insertIndex) + routeBlock + '\n    ' + content.slice(insertIndex);
-    } else {
-      const lastBrace = content.lastIndexOf('}');
-      content = content.slice(0, lastBrace) + routeBlock + '\n' + content.slice(lastBrace);
-    }
-
-    await fs.writeFile(confFile, content, 'utf-8');
-    await execAsync('nginx -t && systemctl reload nginx');
-  },
-
-  async removeSubRoute(domain: string, routePath: string): Promise<void> {
-    const cleanDomain = domain.trim().toLowerCase();
-    let sanitizedPath = routePath.trim();
-    if (!sanitizedPath.startsWith('/')) sanitizedPath = '/' + sanitizedPath;
-    sanitizedPath = sanitizedPath.replace(/\/+$/, '');
-
-    const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
-    let content = await fs.readFile(confFile, 'utf-8');
-
-    const cleanRegex = new RegExp(`\\s*# ROUTE_START:${sanitizedPath}[\\s\\S]*?# ROUTE_END:${sanitizedPath}`, 'g');
-    content = content.replace(cleanRegex, '');
-
-    await fs.writeFile(confFile, content, 'utf-8');
-    await execAsync('nginx -t && systemctl reload nginx');
-  },
-
-  async issueSsl(domain: string, email: string): Promise<string> {
-    const cleanDomain = domain.trim().toLowerCase();
-    const cleanEmail = email && email.trim() ? email.trim() : 'admin@' + cleanDomain;
-
-    const isSubdomain = cleanDomain.split('.').length > 2;
-    const domainFlags = isSubdomain ? `-d ${cleanDomain}` : `-d ${cleanDomain} -d www.${cleanDomain}`;
-
-    const cmd = `certbot --nginx ${domainFlags} --non-interactive --agree-tos -m ${cleanEmail} --redirect`;
-    const { stdout, stderr } = await execAsync(cmd);
-    await execAsync('systemctl reload nginx');
-    return stdout || stderr;
-  },
-
-  async deleteDomain(domain: string): Promise<void> {
-    const cleanDomain = domain.trim().toLowerCase();
-    const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
-    const symlinkFile = path.join(this.getSitesEnabledDir(), `${cleanDomain}.conf`);
-
-    try {
-      await fs.unlink(symlinkFile);
-    } catch {}
-
-    try {
-      await fs.unlink(confFile);
-    } catch {}
-
-    await execAsync('nginx -t && systemctl reload nginx');
   },
 };
