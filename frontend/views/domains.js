@@ -35,7 +35,6 @@ export async function renderDomains(container) {
         </button>
       </div>
 
-      <!-- Guía DNS Plegable -->
       <div class="panel-box" style="background:var(--bg-params); border:1px solid var(--border); margin-bottom:24px; border-radius:14px; padding:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="toggleDnsGuideHeader">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -59,13 +58,11 @@ export async function renderDomains(container) {
         </div>
       </div>
 
-      <!-- Tarjeta Formulario -->
       <div class="panel-box" style="border:1.5px dashed var(--primary); background:rgba(37,99,235,0.02); margin-bottom:28px; border-radius:18px; padding:24px;">
         <h4 style="font-size:1.05rem; font-weight:800; margin-bottom:18px;">
           <i class="fas fa-plus-circle" style="color:var(--primary); margin-right:6px;"></i> Vincular Dominio o Subruta
         </h4>
 
-        <!-- Fila 1: Dominio y Tipo de Conexión -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:18px; margin-bottom:18px;">
           <div>
             <label class="param-label">Dominio o Subdominio</label>
@@ -86,13 +83,11 @@ export async function renderDomains(container) {
           </div>
         </div>
 
-        <!-- Fila 2: Subruta condicional -->
         <div id="subRouteFieldWrapper" style="display:none; margin-bottom:18px;">
           <label class="param-label">Subruta URL</label>
           <input type="text" id="subRoutePath" class="param-input" placeholder="ej. /files/database o /api2" />
         </div>
 
-        <!-- Fila 3: Selección de Destino (Puerto o Carpeta) -->
         <div style="background:var(--bg-card); padding:18px; border-radius:14px; border:1px solid var(--border); margin-bottom:18px;">
           <label class="param-label">Destino de la Conexión</label>
           <div style="display:flex; gap:20px; margin-bottom:14px; flex-wrap:wrap;">
@@ -125,7 +120,6 @@ export async function renderDomains(container) {
           </div>
         </div>
 
-        <!-- Fila 4: SSL y Correo -->
         <div id="sslOptionsWrapper" style="margin-bottom:20px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
             <input type="checkbox" id="autoSslCheck" checked style="width:18px; height:18px; cursor:pointer;" />
@@ -139,20 +133,17 @@ export async function renderDomains(container) {
           </div>
         </div>
 
-        <!-- Botón Guardar -->
         <button class="btn-full" id="btnSaveConfig" style="width:auto; padding:14px 28px; font-size:0.92rem;">
           <i class="fas fa-save"></i> Guardar y Aplicar en Nginx
         </button>
       </div>
 
-      <!-- Lista de Dominios -->
       <div>
         <h4 style="font-size:1.1rem; font-weight:800; margin-bottom:14px;">Dominios & Subrutas Configurados</h4>
         <div id="domainsListContainer">Cargando dominios...</div>
       </div>
     </div>
 
-    <!-- Modal Explorador de Archivos/Carpetas con Navegación de Subcarpetas -->
     <div class="modal" id="modalFilePicker">
       <div class="modal-content" style="max-width:580px; padding:22px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -436,7 +427,7 @@ async function loadDomainList() {
     container.querySelectorAll('.btn-remove-subroute').forEach((b) => {
       b.onclick = () => removeSubRoute(b.getAttribute('data-domain'), b.getAttribute('data-path'));
     });
-  } catch (err: any) {
+  } catch (err) {
     container.innerHTML = `<p style="color:#ef4444; padding:10px;">Error: ${err.message}</p>`;
   }
 }
@@ -510,7 +501,7 @@ async function handleSaveConfiguration() {
     } else {
       showAppDialog('Error al Configurar Nginx', data.error || 'Ocurrió un error al escribir la configuración.', true);
     }
-  } catch (networkErr: any) {
+  } catch (networkErr) {
     showAppDialog('Fallo al Comunicar con Nginx', networkErr.message || 'El servidor tardó demasiado en responder.', true);
   } finally {
     btn.disabled = false;
@@ -557,7 +548,7 @@ async function issueSslForDomain(domain) {
     } else {
       showAppDialog('Fallo en Certbot SSL', d.error || 'Error al emitir certificado.', true);
     }
-  } catch (err: any) {
+  } catch (err) {
     showAppDialog('Error de Red', err.message || 'No se pudo contactar al servidor para emitir el certificado.', true);
   }
 }
@@ -569,7 +560,7 @@ async function deleteDomainConfig(domain) {
     await fetch(`/api/nginx/delete?domain=${encodeURIComponent(domain)}`, { method: 'DELETE' });
     window.showToast?.('Dominio eliminado de Nginx');
     loadDomainList();
-  } catch (err: any) {
+  } catch (err) {
     showAppDialog('Error', err.message || 'Error al eliminar dominio', true);
   }
 }
