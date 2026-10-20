@@ -27,7 +27,7 @@ export async function renderDomains(container) {
             <i class="fas fa-globe" style="color:var(--primary); margin-right:6px;"></i> Dominios & Proxy Nginx
           </h3>
           <p style="font-size:0.84rem; color:var(--text-gray); margin-top:4px;">
-            Vincula dominios a puertos o carpetas del servidor y activa certificados SSL automáticos
+            Conecta dominios o subrutas a puertos o carpetas del servidor con SSL automático
           </p>
         </div>
         <button class="stat-btn" id="btnRefreshDomains" style="padding: 10px 16px;">
@@ -35,6 +35,7 @@ export async function renderDomains(container) {
         </button>
       </div>
 
+      <!-- Guía DNS Plegable -->
       <div class="panel-box" style="background:var(--bg-params); border:1px solid var(--border); margin-bottom:24px; border-radius:14px; padding:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="toggleDnsGuideHeader">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -51,18 +52,20 @@ export async function renderDomains(container) {
               <span>Si usas Cloudflare, activa la <b>Nube Gris (DNS Only)</b> para que Certbot pueda emitir el certificado sin bloqueos.</span>
             </div>
             <div style="background:var(--bg-card); padding:14px; border-radius:12px; border:1px solid var(--border);">
-              <b style="color:var(--primary); display:block; margin-bottom:4px;">2. Conectar Subrutas</b>
-              <span>Conecta rutas como <code>/files/database</code> a un puerto interno (ej. <code>8080</code>) o a una carpeta directa de tu VPS sin abrir puertos públicos.</span>
+              <b style="color:var(--primary); display:block; margin-bottom:4px;">2. Carpetas y Puertos Automáticos</b>
+              <span>Si vinculas una carpeta, Nginx le asignará automáticamente un puerto libre del VPS para servir la web sin conflictos.</span>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- Tarjeta Formulario Unificado -->
       <div class="panel-box" style="border:1.5px dashed var(--primary); background:rgba(37,99,235,0.02); margin-bottom:28px; border-radius:18px; padding:24px;">
         <h4 style="font-size:1.05rem; font-weight:800; margin-bottom:18px;">
           <i class="fas fa-plus-circle" style="color:var(--primary); margin-right:6px;"></i> Vincular Dominio o Subruta
         </h4>
 
+        <!-- Fila 1: Dominio y Tipo de Conexión -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:18px; margin-bottom:18px;">
           <div>
             <label class="param-label">Dominio o Subdominio</label>
@@ -83,11 +86,13 @@ export async function renderDomains(container) {
           </div>
         </div>
 
+        <!-- Fila 2: Subruta condicional -->
         <div id="subRouteFieldWrapper" style="display:none; margin-bottom:18px;">
           <label class="param-label">Subruta URL</label>
           <input type="text" id="subRoutePath" class="param-input" placeholder="ej. /files/database o /api2" />
         </div>
 
+        <!-- Fila 3: Selección de Destino (Puerto o Carpeta) -->
         <div style="background:var(--bg-card); padding:18px; border-radius:14px; border:1px solid var(--border); margin-bottom:18px;">
           <label class="param-label">Destino de la Conexión</label>
           <div style="display:flex; gap:20px; margin-bottom:14px; flex-wrap:wrap;">
@@ -100,13 +105,8 @@ export async function renderDomains(container) {
           </div>
 
           <div id="portTargetWrapper">
-            <label class="param-label">Puerto interno</label>
-            <div style="display:flex; gap:8px;">
-              <input type="number" id="targetPortInput" class="param-input" value="3000" placeholder="3000" style="flex:1;" />
-              <button class="stat-btn" id="btnFindFreePort" type="button" style="white-space:nowrap;">
-                <i class="fas fa-dice"></i> Puerto Libre Random
-              </button>
-            </div>
+            <label class="param-label">Puerto interno (ej. 3000, 8080, 5000)</label>
+            <input type="number" id="targetPortInput" class="param-input" value="3000" placeholder="3000" />
           </div>
 
           <div id="pathTargetWrapper" style="display:none;">
@@ -117,9 +117,13 @@ export async function renderDomains(container) {
                 <i class="fas fa-folder-open"></i> Elegir del Servidor
               </button>
             </div>
+            <span style="font-size:0.75rem; color:var(--text-gray); margin-top:6px; display:block;">
+              Al elegir carpeta, se le asignará automáticamente un puerto libre en el sistema.
+            </span>
           </div>
         </div>
 
+        <!-- Fila 4: SSL y Correo -->
         <div id="sslOptionsWrapper" style="margin-bottom:20px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
             <input type="checkbox" id="autoSslCheck" checked style="width:18px; height:18px; cursor:pointer;" />
@@ -138,12 +142,14 @@ export async function renderDomains(container) {
         </button>
       </div>
 
+      <!-- Lista de Dominios -->
       <div>
         <h4 style="font-size:1.1rem; font-weight:800; margin-bottom:14px;">Dominios & Subrutas Configurados</h4>
         <div id="domainsListContainer">Cargando dominios...</div>
       </div>
     </div>
 
+    <!-- Modal Explorador de Archivos/Carpetas con Navegación de Subcarpetas -->
     <div class="modal" id="modalFilePicker">
       <div class="modal-content" style="max-width:580px; padding:22px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -189,7 +195,6 @@ export async function renderDomains(container) {
   const domainInput = document.getElementById('targetDomainInput');
   const domainSelect = document.getElementById('quickSelectDomain');
   const btnPickPath = document.getElementById('btnPickServerPath');
-  const btnFreePort = document.getElementById('btnFindFreePort');
 
   if (guideHeader && guideBody && chevron) {
     guideHeader.onclick = () => {
@@ -218,24 +223,6 @@ export async function renderDomains(container) {
       domainInput.value = domainSelect.value;
     }
   };
-
-  if (btnFreePort) {
-    btnFreePort.onclick = async () => {
-      btnFreePort.disabled = true;
-      try {
-        const res = await fetch('/api/nginx/free-port');
-        const data = await res.json();
-        if (data.port) {
-          document.getElementById('targetPortInput').value = data.port;
-          window.showToast?.(`Puerto libre encontrado: ${data.port} ✰`);
-        }
-      } catch {
-        window.showToast?.('No se pudo buscar puerto libre');
-      } finally {
-        btnFreePort.disabled = false;
-      }
-    };
-  }
 
   btnPickPath.onclick = () => openFilePicker('');
 
@@ -361,8 +348,8 @@ async function loadDomainList() {
         : '';
 
       const targetDesc = d.targetType === 'port'
-        ? `Puerto <code>${d.target}</code>`
-        : `Carpeta <code>${d.target}</code>`;
+        ? `Puerto <code>${d.target || '3000'}</code>`
+        : `Carpeta <code>${d.target || '/'}</code>`;
 
       let subRoutesListHtml = '';
       if (d.subRoutes && d.subRoutes.length > 0) {
@@ -444,26 +431,18 @@ async function handleSaveConfiguration() {
   let portVal = document.getElementById('targetPortInput').value.trim();
   const pathVal = document.getElementById('targetPathInput').value.trim();
 
-  if (targetType === 'path' && !portVal) {
-    try {
-      const freeRes = await fetch('/api/nginx/free-port');
-      const freeData = await freeRes.json();
-      if (freeData.port) portVal = String(freeData.port);
-    } catch {}
-  }
-
-  const target = targetType === 'port' ? portVal : pathVal;
-
-  const autoSsl = document.getElementById('autoSslCheck').checked;
-  const email = document.getElementById('certbotEmailInput').value.trim();
   const btn = document.getElementById('btnSaveConfig');
 
   if (!domain) {
     showAppDialog('Campo Requerido', 'Ingresa o selecciona un dominio para continuar.', true);
     return;
   }
-  if (!target) {
-    showAppDialog('Destino Requerido', targetType === 'port' ? 'Ingresa el puerto interno de la VPS' : 'Selecciona una carpeta o archivo del servidor con el botón "Elegir del Servidor".', true);
+  if (targetType === 'path' && !pathVal) {
+    showAppDialog('Destino Requerido', 'Selecciona una carpeta o archivo del servidor con el botón "Elegir del Servidor".', true);
+    return;
+  }
+  if (targetType === 'port' && !portVal) {
+    showAppDialog('Destino Requerido', 'Ingresa el puerto interno en el VPS.', true);
     return;
   }
   if (isSubRoute && !routePath) {
@@ -474,6 +453,20 @@ async function handleSaveConfiguration() {
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Configurando Nginx...';
   window.showToast?.('Aplicando configuración en el servidor...');
+
+  if (targetType === 'path') {
+    try {
+      const freeRes = await fetch('/api/nginx/free-port');
+      const freeData = await freeRes.json();
+      if (freeData.port) {
+        portVal = String(freeData.port);
+      }
+    } catch {}
+  }
+
+  const target = targetType === 'port' ? portVal : pathVal;
+  const autoSsl = document.getElementById('autoSslCheck').checked;
+  const email = document.getElementById('certbotEmailInput').value.trim();
 
   try {
     const res = await fetch('/api/nginx/save-domain-route', {
@@ -489,6 +482,13 @@ async function handleSaveConfiguration() {
         autoSsl,
       }),
     });
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const rawText = await res.text();
+      showAppDialog('Error del Servidor', 'El servidor respondió con código ' + res.status + ' en lugar de JSON. Verifica la conexión.', true);
+      return;
+    }
 
     const data = await res.json();
     if (res.ok && data.success) {
