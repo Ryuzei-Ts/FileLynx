@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <base href="/">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title id="sitePageTitle">FileLynx Dashboard</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -26,11 +27,11 @@
 
   <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
-  <aside class="sidebar" id="sidebar">
+  <aside class="sidebar" id="sidebar" style="display:none;">
     <div>
       <div class="user-badge-sidebar">
         <span>Usuario</span>
-        <b id="uEmail">admin</b>
+        <b id="uEmail">---</b>
       </div>
       <div class="sidebar-section">
         <p class="sidebar-title">Módulos</p>
@@ -73,7 +74,7 @@
       <form id="authForm" onsubmit="event.preventDefault(); doLogin(); return false;">
         <div class="param-group">
           <label class="param-label">Usuario</label>
-          <input type="text" id="authUsername" class="param-input" required placeholder="admin">
+          <input type="text" id="authUsername" class="param-input" required placeholder="admin o Ryuzei">
         </div>
         <div class="param-group">
           <label class="param-label">Contraseña</label>
@@ -238,8 +239,8 @@
     </div>
   </div>
 
-  <div id="toast">Acción realizada</div>
+  <div id="toast"></div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
