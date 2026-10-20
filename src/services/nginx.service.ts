@@ -6,11 +6,17 @@ import { logger } from '#utils/logger';
 
 const execAsync = promisify(exec);
 
+export interface SubRoute {
+  path: string;
+  targetPort: number;
+}
+
 export interface DomainSite {
   domain: string;
   targetPort: number;
   hasSsl: boolean;
   enabled: boolean;
+  subRoutes: SubRoute[];
 }
 
 export const nginxService = {
@@ -77,7 +83,7 @@ export const nginxService = {
 
         await fs.symlink(defaultAvailable, defaultEnabled);
         await execAsync('nginx -t && systemctl reload nginx');
-        logger.info(`Nginx default proxy configurado automáticamente al puerto ${targetPort}`);
+        logger.info(`Nginx default proxy configurado al puerto ${targetPort}`);
       }
     } catch (err: any) {
       logger.warn('No se pudo auto-configurar Nginx default proxy:', err.message);
@@ -101,7 +107,8 @@ export const nginxService = {
         const filePath = path.join(availableDir, file);
         const content = await fs.readFile(filePath, 'utf-8');
 
-        const portMatch = content.match(/proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+);/);
+        const rootPortMatch = content.match(/location\s+\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+);/);
+        const targetPort = rootPortMatch ? parseInt(rootPortMatch[1], 10) : 3000;
         const hasSsl = content.includes('ssl_certificate') || content.includes('managed by Certbot');
 
         let enabled = false;
@@ -110,11 +117,25 @@ export const nginxService = {
           enabled = true;
         } catch {}
 
+        const subRoutes: SubRoute[] = [];
+        const locationRegex = /location\s+(?:\^~\s*)?(\/[a-zA-Z0-9_\-\/]+)\/\s*\{[^}]*proxy_pass\s+http:\/\/(?:localhost|127\.0\.0\.1):(\d+)\/?;/g;
+        let match;
+        while ((match = locationRegex.exec(content)) !== null) {
+          const matchedPath = match[1];
+          if (matchedPath !== '/') {
+            subRoutes.push({
+              path: matchedPath,
+              targetPort: parseInt(match[2], 10),
+            });
+          }
+        }
+
         results.push({
           domain,
-          targetPort: portMatch ? parseInt(portMatch[1], 10) : 3000,
+          targetPort,
           hasSsl,
           enabled,
+          subRoutes,
         });
       }
     } catch {}
@@ -163,6 +184,66 @@ export const nginxService = {
     } catch {}
 
     await fs.symlink(confFile, symlinkFile);
+    await execAsync('nginx -t && systemctl reload nginx');
+  },
+
+  async addSubRoute(domain: string, routePath: string, targetPort: number): Promise<void> {
+    const cleanDomain = domain.trim().toLowerCase();
+    let sanitizedPath = routePath.trim();
+    if (!sanitizedPath.startsWith('/')) sanitizedPath = '/' + sanitizedPath;
+    sanitizedPath = sanitizedPath.replace(/\/+$/, '');
+
+    const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
+    let content = await fs.readFile(confFile, 'utf-8');
+
+    const locationBlock = `
+    # ROUTE_START:${sanitizedPath}
+    location ^~ ${sanitizedPath}/ {
+        proxy_pass http://127.0.0.1:${targetPort}/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = ${sanitizedPath} {
+        return 301 ${sanitizedPath}/;
+    }
+    # ROUTE_END:${sanitizedPath}
+`;
+
+    const cleanRegex = new RegExp(`\\s*# ROUTE_START:${sanitizedPath}[\\s\\S]*?# ROUTE_END:${sanitizedPath}`, 'g');
+    content = content.replace(cleanRegex, '');
+
+    const insertIndex = content.indexOf('location / {');
+    if (insertIndex !== -1) {
+      content = content.slice(0, insertIndex) + locationBlock + '\n    ' + content.slice(insertIndex);
+    } else {
+      const lastBrace = content.lastIndexOf('}');
+      content = content.slice(0, lastBrace) + locationBlock + '\n' + content.slice(lastBrace);
+    }
+
+    await fs.writeFile(confFile, content, 'utf-8');
+    await execAsync('nginx -t && systemctl reload nginx');
+  },
+
+  async removeSubRoute(domain: string, routePath: string): Promise<void> {
+    const cleanDomain = domain.trim().toLowerCase();
+    let sanitizedPath = routePath.trim();
+    if (!sanitizedPath.startsWith('/')) sanitizedPath = '/' + sanitizedPath;
+    sanitizedPath = sanitizedPath.replace(/\/+$/, '');
+
+    const confFile = path.join(this.getSitesAvailableDir(), `${cleanDomain}.conf`);
+    let content = await fs.readFile(confFile, 'utf-8');
+
+    const cleanRegex = new RegExp(`\\s*# ROUTE_START:${sanitizedPath}[\\s\\S]*?# ROUTE_END:${sanitizedPath}`, 'g');
+    content = content.replace(cleanRegex, '');
+
+    await fs.writeFile(confFile, content, 'utf-8');
     await execAsync('nginx -t && systemctl reload nginx');
   },
 
