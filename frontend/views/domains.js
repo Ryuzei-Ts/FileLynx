@@ -27,7 +27,7 @@ export async function renderDomains(container) {
             <i class="fas fa-globe" style="color:var(--primary); margin-right:6px;"></i> Dominios & Proxy Nginx
           </h3>
           <p style="font-size:0.84rem; color:var(--text-gray); margin-top:4px;">
-            Conecta dominios o subrutas a puertos o carpetas del servidor con SSL automático
+            Conecta dominios a puertos o carpetas del servidor con SSL automático
           </p>
         </div>
         <button class="stat-btn" id="btnRefreshDomains" style="padding: 10px 16px;">
@@ -59,71 +59,44 @@ export async function renderDomains(container) {
         </div>
       </div>
 
-      <!-- Tarjeta Formulario Unificado -->
+      <!-- Tarjeta Formulario -->
       <div class="panel-box" style="border:1.5px dashed var(--primary); background:rgba(37,99,235,0.02); margin-bottom:28px; border-radius:18px; padding:24px;">
         <h4 style="font-size:1.05rem; font-weight:800; margin-bottom:18px;">
-          <i class="fas fa-plus-circle" style="color:var(--primary); margin-right:6px;"></i> Vincular Dominio o Subruta
+          <i class="fas fa-plus-circle" style="color:var(--primary); margin-right:6px;"></i> Vincular Dominio a Puerto o Carpeta
         </h4>
 
-        <!-- Fila 1: Dominio y Tipo de Conexión -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:18px; margin-bottom:18px;">
-          <div>
-            <label class="param-label">Dominio o Subdominio</label>
-            <div style="display:flex; gap:8px;">
-              <input type="text" id="targetDomainInput" class="param-input" placeholder="ej. db.ryuzei.xyz o dash.ryuzei.xyz" style="flex:1;" />
-              <select id="quickSelectDomain" class="stat-btn" style="max-width:150px; cursor:pointer;" title="Elegir existente">
-                <option value="">Elegir existente...</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label class="param-label">Tipo de Conexión</label>
-            <select id="connTypeSelect" class="param-input" style="cursor:pointer;">
-              <option value="root">Dominio Raíz (/)</option>
-              <option value="subroute">Subruta URL (ej. /files/database)</option>
-            </select>
-          </div>
+        <div style="margin-bottom:18px;">
+          <label class="param-label">Nombre de Dominio o Subdominio</label>
+          <input type="text" id="targetDomainInput" class="param-input" placeholder="ej. bot.ryuzei.xyz" />
         </div>
 
-        <!-- Fila 2: Subruta condicional -->
-        <div id="subRouteFieldWrapper" style="display:none; margin-bottom:18px;">
-          <label class="param-label">Subruta URL</label>
-          <input type="text" id="subRoutePath" class="param-input" placeholder="ej. /files/database o /api2" />
-        </div>
-
-        <!-- Fila 3: Selección de Destino (Puerto o Carpeta) -->
         <div style="background:var(--bg-card); padding:18px; border-radius:14px; border:1px solid var(--border); margin-bottom:18px;">
           <label class="param-label">Destino de la Conexión</label>
           <div style="display:flex; gap:20px; margin-bottom:14px; flex-wrap:wrap;">
             <label style="display:flex; align-items:center; gap:8px; font-size:0.86rem; font-weight:700; cursor:pointer;">
-              <input type="radio" name="targetTypeRadio" value="port" checked /> Puerto interno en VPS
+              <input type="radio" name="targetTypeRadio" value="port" checked /> Puerto interno existente (ej. 3000)
             </label>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.86rem; font-weight:700; cursor:pointer;">
-              <input type="radio" name="targetTypeRadio" value="path" /> Carpeta o Archivo del Servidor
+              <input type="radio" name="targetTypeRadio" value="path" /> Carpeta del Servidor (Asigna puerto automático)
             </label>
           </div>
 
           <div id="portTargetWrapper">
-            <label class="param-label">Puerto interno (ej. 3000, 8080, 5000)</label>
+            <label class="param-label">Puerto interno</label>
             <input type="number" id="targetPortInput" class="param-input" value="3000" placeholder="3000" />
           </div>
 
           <div id="pathTargetWrapper" style="display:none;">
-            <label class="param-label">Ruta de Carpeta o Archivo</label>
+            <label class="param-label">Ruta de la Carpeta en el Servidor</label>
             <div style="display:flex; gap:10px;">
-              <input type="text" id="targetPathInput" class="param-input" placeholder="ej. /root/mi-web o subcarpeta" style="flex:1;" />
+              <input type="text" id="targetPathInput" class="param-input" placeholder="ej. /root/Sukuna-Ryuzei" style="flex:1;" />
               <button class="stat-btn" id="btnPickServerPath" type="button" style="white-space:nowrap; padding:10px 16px;">
                 <i class="fas fa-folder-open"></i> Elegir del Servidor
               </button>
             </div>
-            <span style="font-size:0.75rem; color:var(--text-gray); margin-top:6px; display:block;">
-              Al elegir carpeta, se le asignará automáticamente un puerto libre en el sistema.
-            </span>
           </div>
         </div>
 
-        <!-- Fila 4: SSL y Correo -->
         <div id="sslOptionsWrapper" style="margin-bottom:20px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
             <input type="checkbox" id="autoSslCheck" checked style="width:18px; height:18px; cursor:pointer;" />
@@ -144,12 +117,12 @@ export async function renderDomains(container) {
 
       <!-- Lista de Dominios -->
       <div>
-        <h4 style="font-size:1.1rem; font-weight:800; margin-bottom:14px;">Dominios & Subrutas Configurados</h4>
+        <h4 style="font-size:1.1rem; font-weight:800; margin-bottom:14px;">Dominios Configurados</h4>
         <div id="domainsListContainer">Cargando dominios...</div>
       </div>
     </div>
 
-    <!-- Modal Explorador de Archivos/Carpetas con Navegación de Subcarpetas -->
+    <!-- Modal Explorador de Servidor -->
     <div class="modal" id="modalFilePicker">
       <div class="modal-content" style="max-width:580px; padding:22px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -171,7 +144,7 @@ export async function renderDomains(container) {
         </div>
 
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-          <span style="font-size:0.75rem; color:var(--text-gray);">Haz clic en una carpeta para abrirla</span>
+          <span style="font-size:0.75rem; color:var(--text-gray);">Haz clic en una carpeta para seleccionarla</span>
           <div style="display:flex; gap:8px;">
             <button class="stat-btn" onclick="document.getElementById('modalFilePicker').classList.remove('active')">Cancelar</button>
             <button class="btn-full" style="width:auto; padding:10px 18px;" id="btnConfirmSelectedPath">Seleccionar Esta Carpeta</button>
@@ -186,14 +159,9 @@ export async function renderDomains(container) {
   const guideHeader = document.getElementById('toggleDnsGuideHeader');
   const guideBody = document.getElementById('dnsGuideBody');
   const chevron = document.getElementById('dnsGuideChevron');
-  const connType = document.getElementById('connTypeSelect');
-  const subRouteWrap = document.getElementById('subRouteFieldWrapper');
-  const sslWrap = document.getElementById('sslOptionsWrapper');
   const radioButtons = document.querySelectorAll('input[name="targetTypeRadio"]');
   const portWrap = document.getElementById('portTargetWrapper');
   const pathWrap = document.getElementById('pathTargetWrapper');
-  const domainInput = document.getElementById('targetDomainInput');
-  const domainSelect = document.getElementById('quickSelectDomain');
   const btnPickPath = document.getElementById('btnPickServerPath');
 
   if (guideHeader && guideBody && chevron) {
@@ -204,12 +172,6 @@ export async function renderDomains(container) {
     };
   }
 
-  connType.onchange = () => {
-    const isSub = connType.value === 'subroute';
-    subRouteWrap.style.display = isSub ? 'block' : 'none';
-    sslWrap.style.display = isSub ? 'none' : 'block';
-  };
-
   radioButtons.forEach((r) => {
     r.onchange = () => {
       const isPort = r.value === 'port';
@@ -217,12 +179,6 @@ export async function renderDomains(container) {
       pathWrap.style.display = isPort ? 'none' : 'block';
     };
   });
-
-  domainSelect.onchange = () => {
-    if (domainSelect.value) {
-      domainInput.value = domainSelect.value;
-    }
-  };
 
   btnPickPath.onclick = () => openFilePicker('');
 
@@ -234,7 +190,7 @@ export async function renderDomains(container) {
   };
 
   document.getElementById('btnConfirmSelectedPath').onclick = () => {
-    document.getElementById('targetPathInput').value = filePickerCurrentDir || '/';
+    document.getElementById('targetPathInput').value = filePickerCurrentDir ? '/' + filePickerCurrentDir : '/root';
     document.getElementById('modalFilePicker').classList.remove('active');
   };
 
@@ -251,7 +207,7 @@ async function openFilePicker(relPath) {
   const entriesBox = document.getElementById('filePickerEntries');
 
   pathDisplay.value = relPath ? `/${relPath}` : '/ (Raíz)';
-  entriesBox.innerHTML = '<p style="padding:16px; color:var(--text-gray); text-align:center;"><i class="fas fa-spinner fa-spin"></i> Cargando contenido...</p>';
+  entriesBox.innerHTML = '<p style="padding:16px; color:var(--text-gray); text-align:center;"><i class="fas fa-spinner fa-spin"></i> Cargando...</p>';
   modal.classList.add('active');
 
   try {
@@ -260,11 +216,12 @@ async function openFilePicker(relPath) {
     entriesBox.innerHTML = '';
 
     if (!data.files || data.files.length === 0) {
-      entriesBox.innerHTML = '<p style="padding:16px; color:var(--text-gray); text-align:center;">Esta carpeta está vacía.</p>';
+      entriesBox.innerHTML = '<p style="padding:16px; color:var(--text-gray); text-align:center;">Carpeta vacía.</p>';
       return;
     }
 
     data.files.forEach((f) => {
+      if (!f.isDirectory) return;
       const item = document.createElement('div');
       item.className = 'file-row';
       item.style.padding = '10px 14px';
@@ -273,7 +230,7 @@ async function openFilePicker(relPath) {
 
       item.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; flex:1; cursor:pointer;">
-          <i class="${f.isDirectory ? 'fas fa-folder text-primary' : 'fas fa-file'}" style="color:${f.isDirectory ? '#2563eb' : '#64748b'}; font-size:1.1rem;"></i>
+          <i class="fas fa-folder text-primary" style="color:#2563eb; font-size:1.1rem;"></i>
           <span style="font-size:0.86rem; font-weight:700;">${f.name}</span>
         </div>
         <button class="stat-btn" style="padding:4px 10px; font-size:0.75rem;">Elegir</button>
@@ -281,29 +238,23 @@ async function openFilePicker(relPath) {
 
       item.querySelector('button').onclick = (e) => {
         e.stopPropagation();
-        document.getElementById('targetPathInput').value = f.path;
+        document.getElementById('targetPathInput').value = f.path.startsWith('/') ? f.path : '/' + f.path;
         modal.classList.remove('active');
       };
 
       item.onclick = () => {
-        if (f.isDirectory) {
-          openFilePicker(f.path);
-        } else {
-          document.getElementById('targetPathInput').value = f.path;
-          modal.classList.remove('active');
-        }
+        openFilePicker(f.path);
       };
 
       entriesBox.appendChild(item);
     });
   } catch (err) {
-    entriesBox.innerHTML = `<p style="color:#ef4444; padding:16px;">Error al listar carpetas: ${err.message}</p>`;
+    entriesBox.innerHTML = `<p style="color:#ef4444; padding:16px;">Error: ${err.message}</p>`;
   }
 }
 
 async function loadDomainList() {
   const container = document.getElementById('domainsListContainer');
-  const domainSelect = document.getElementById('quickSelectDomain');
   if (!container) return;
   container.innerHTML = '<p style="color:var(--text-gray); padding:10px;">Consultando configuración de Nginx...</p>';
 
@@ -312,107 +263,40 @@ async function loadDomainList() {
     const data = await res.json();
 
     if (!data.installed) {
-      container.innerHTML = `
-        <div style="padding:16px; background:rgba(245,158,11,0.1); border-left:4px solid var(--price-color); border-radius:8px;">
-          <b>Nginx no está instalado en este VPS.</b>
-          <p style="font-size:0.8rem; margin-top:4px;">Instálalo ejecutando: <code>apt-get install -y nginx certbot python3-certbot-nginx</code></p>
-        </div>
-      `;
+      container.innerHTML = '<p style="color:#ef4444; padding:10px;">Nginx no está instalado.</p>';
       return;
     }
 
-    currentLoadedDomains = data.domains || [];
-
-    if (domainSelect) {
-      let options = '<option value="">Elegir existente...</option>';
-      for (let i = 0; i < currentLoadedDomains.length; i++) {
-        options += '<option value="' + currentLoadedDomains[i].domain + '">' + currentLoadedDomains[i].domain + '</option>';
-      }
-      domainSelect.innerHTML = options;
-    }
-
-    if (currentLoadedDomains.length === 0) {
-      container.innerHTML = '<p style="color:var(--text-gray); padding:10px;">No hay dominios vinculados aún en sites-available.</p>';
+    const domains = data.domains || [];
+    if (domains.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-gray); padding:10px;">No hay dominios vinculados aún.</p>';
       return;
     }
 
-    let rowsHtml = '';
-    for (let i = 0; i < currentLoadedDomains.length; i++) {
-      const d = currentLoadedDomains[i];
-      const sslBadge = d.hasSsl
-        ? '<span style="font-size:0.7rem; background:#10b981; color:#fff; padding:3px 8px; border-radius:4px; font-weight:800;">SSL HTTPS</span>'
-        : '<span style="font-size:0.7rem; background:#64748b; color:#fff; padding:3px 8px; border-radius:4px; font-weight:800;">HTTP</span>';
-
-      const sslBtn = !d.hasSsl
-        ? '<button class="stat-btn btn-issue-ssl" data-domain="' + d.domain + '"><i class="fas fa-lock"></i> Activar SSL</button>'
-        : '';
-
-      const targetDesc = d.targetType === 'port'
-        ? `Puerto <code>${d.target || '3000'}</code>`
-        : `Carpeta <code>${d.target || '/'}</code>`;
-
-      let subRoutesListHtml = '';
-      if (d.subRoutes && d.subRoutes.length > 0) {
-        let subItems = '';
-        for (let j = 0; j < d.subRoutes.length; j++) {
-          const r = d.subRoutes[j];
-          const subTargetDesc = r.type === 'port'
-            ? `Puerto <b>${r.target}</b>`
-            : `Carpeta <b>${r.target}</b>`;
-
-          subItems += `
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.82rem; padding:6px 0; border-bottom:1px dashed var(--border);">
-              <div>
-                <code>https://${d.domain}${r.path}</code> &rarr; ${subTargetDesc}
-              </div>
-              <button class="stat-btn btn-remove-subroute" style="color:#ef4444; padding:3px 8px; font-size:0.72rem;" data-domain="${d.domain}" data-path="${r.path}">
-                <i class="fas fa-times"></i>
-              </button>
+    container.innerHTML = domains.map((d) => `
+      <div class="panel-box" style="margin-bottom:14px; padding:18px; border:1px solid var(--border); border-radius:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <b style="font-size:1.05rem;">${d.domain}</b>
+              <span style="font-size:0.7rem; background:${d.hasSsl ? '#10b981' : '#64748b'}; color:#fff; padding:3px 8px; border-radius:4px; font-weight:800;">
+                ${d.hasSsl ? 'SSL HTTPS' : 'HTTP'}
+              </span>
             </div>
-          `;
-        }
-        subRoutesListHtml = `
-          <div style="margin-top:12px; padding:10px 14px; background:var(--bg-params); border-radius:10px; border:1px solid var(--border);">
-            <span style="font-size:0.72rem; font-weight:800; color:var(--text-gray); text-transform:uppercase; letter-spacing:0.5px;">Subrutas conectadas:</span>
-            <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px;">
-              ${subItems}
+            <div style="font-size:0.8rem; color:var(--text-gray); margin-top:4px;">
+              Proxy apuntando al <b>Puerto interno ${d.target}</b> &bull; Estado: Activo
             </div>
           </div>
-        `;
-      }
-
-      rowsHtml += `
-        <div class="panel-box" style="margin-bottom:14px; padding:18px; border:1px solid var(--border); border-radius:14px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <b style="font-size:1.05rem;">${d.domain}</b>
-                ${sslBadge}
-              </div>
-              <div style="font-size:0.8rem; color:var(--text-gray); margin-top:4px;">
-                Raíz <code>/</code> &rarr; ${targetDesc} &bull; Estado: ${d.enabled ? 'Activo' : 'Inactivo'}
-              </div>
-            </div>
-            <div style="display:flex; gap:8px;">
-              ${sslBtn}
-              <button class="stat-btn btn-delete-domain" style="color:#ef4444;" data-domain="${d.domain}"><i class="fas fa-trash"></i> Eliminar Dominio</button>
-            </div>
+          <div style="display:flex; gap:8px;">
+            ${!d.hasSsl ? `<button class="stat-btn btn-issue-ssl" data-domain="${d.domain}"><i class="fas fa-lock"></i> Activar SSL</button>` : ''}
+            <button class="stat-btn" style="color:#ef4444;" onclick="deleteDomainConfig('${d.domain}')"><i class="fas fa-trash"></i> Eliminar</button>
           </div>
-          ${subRoutesListHtml}
         </div>
-      `;
-    }
-
-    container.innerHTML = rowsHtml;
+      </div>
+    `).join('');
 
     container.querySelectorAll('.btn-issue-ssl').forEach((b) => {
       b.onclick = () => issueSslForDomain(b.getAttribute('data-domain'));
-    });
-    container.querySelectorAll('.btn-delete-domain').forEach((b) => {
-      b.onclick = () => deleteDomainConfig(b.getAttribute('data-domain'));
-    });
-    container.querySelectorAll('.btn-remove-subroute').forEach((b) => {
-      b.onclick = () => removeSubRoute(b.getAttribute('data-domain'), b.getAttribute('data-path'));
     });
   } catch (err) {
     container.innerHTML = `<p style="color:#ef4444; padding:10px;">Error: ${err.message}</p>`;
@@ -421,112 +305,49 @@ async function loadDomainList() {
 
 async function handleSaveConfiguration() {
   const domain = document.getElementById('targetDomainInput').value.trim();
-  const connType = document.getElementById('connTypeSelect').value;
-  const isSubRoute = connType === 'subroute';
-  const routePath = document.getElementById('subRoutePath').value.trim();
-
   const targetTypeRadio = document.querySelector('input[name="targetTypeRadio"]:checked');
   const targetType = targetTypeRadio ? targetTypeRadio.value : 'port';
+  const targetPort = document.getElementById('targetPortInput').value.trim();
+  const targetPath = document.getElementById('targetPathInput').value.trim();
 
-  let portVal = document.getElementById('targetPortInput').value.trim();
-  const pathVal = document.getElementById('targetPathInput').value.trim();
-
+  const target = targetType === 'port' ? targetPort : targetPath;
+  const autoSsl = document.getElementById('autoSslCheck').checked;
+  const email = document.getElementById('certbotEmailInput').value.trim();
   const btn = document.getElementById('btnSaveConfig');
 
-  if (!domain) {
-    showAppDialog('Campo Requerido', 'Ingresa o selecciona un dominio para continuar.', true);
-    return;
-  }
-  if (targetType === 'path' && !pathVal) {
-    showAppDialog('Destino Requerido', 'Selecciona una carpeta o archivo del servidor con el botón "Elegir del Servidor".', true);
-    return;
-  }
-  if (targetType === 'port' && !portVal) {
-    showAppDialog('Destino Requerido', 'Ingresa el puerto interno en el VPS.', true);
-    return;
-  }
-  if (isSubRoute && !routePath) {
-    showAppDialog('Subruta Requerida', 'Debes ingresar la subruta (ejemplo: /files/database)', true);
+  if (!domain || !target) {
+    showAppDialog('Campos Requeridos', 'Ingresa el dominio y selecciona la carpeta o puerto de destino.', true);
     return;
   }
 
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Configurando Nginx...';
-  window.showToast?.('Aplicando configuración en el servidor...');
-
-  if (targetType === 'path') {
-    try {
-      const freeRes = await fetch('/api/nginx/free-port');
-      const freeData = await freeRes.json();
-      if (freeData.port) {
-        portVal = String(freeData.port);
-      }
-    } catch {}
-  }
-
-  const target = targetType === 'port' ? portVal : pathVal;
-  const autoSsl = document.getElementById('autoSslCheck').checked;
-  const email = document.getElementById('certbotEmailInput').value.trim();
+  window.showToast?.('Asignando puerto y aplicando Nginx...');
 
   try {
     const res = await fetch('/api/nginx/save-domain-route', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        domain,
-        isSubRoute,
-        routePath,
-        targetType,
-        target,
-        email,
-        autoSsl,
-      }),
+      body: JSON.stringify({ domain, targetType, target, email, autoSsl }),
     });
-
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      const rawText = await res.text();
-      showAppDialog('Error del Servidor', 'El servidor respondió con código ' + res.status + ' en lugar de JSON. Verifica la conexión.', true);
-      return;
-    }
 
     const data = await res.json();
     if (res.ok && data.success) {
-      if (data.warning) {
-        showAppDialog('Aviso de Configuración', data.warning, false);
-      } else {
-        window.showToast?.('Configuración guardada y aplicada en Nginx ✰');
+      let msg = 'Dominio configurado exitosamente ✰';
+      if (data.assignedPort) {
+        msg += ` (Puerto asignado: ${data.assignedPort}). Inicia tu bot con: PORT=${data.assignedPort} pm2 start index.js`;
       }
+      showAppDialog('Configuración Exitosa', msg, false);
+      document.getElementById('targetDomainInput').value = '';
       loadDomainList();
     } else {
-      showAppDialog('Error al Configurar Nginx', data.error || 'Ocurrió un error al escribir la configuración.', true);
+      showAppDialog('Error de Nginx', data.error || 'No se pudo guardar la configuración.', true);
     }
-  } catch (networkErr) {
-    showAppDialog('Fallo al Comunicar con Nginx', networkErr.message || 'El servidor tardó demasiado en responder.', true);
+  } catch (err) {
+    showAppDialog('Error de Red', err.message || 'Error al comunicarse con el servidor.', true);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> Guardar y Aplicar en Nginx';
-  }
-}
-
-async function removeSubRoute(domain, routePath) {
-  if (!confirm(`¿Eliminar la subruta ${routePath} del dominio ${domain}?`)) return;
-
-  try {
-    const res = await fetch('/api/nginx/remove-route', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain, routePath }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      window.showToast?.('Subruta eliminada exitosamente');
-      loadDomainList();
-    } else {
-      showAppDialog('Error', data.error || 'No se pudo eliminar la subruta', true);
-    }
-  } catch {
-    window.showToast?.('Fallo al eliminar subruta');
   }
 }
 
@@ -534,7 +355,7 @@ async function issueSslForDomain(domain) {
   const email = prompt('Correo para Certbot Let\'s Encrypt:', 'admin@' + domain);
   if (!email) return;
 
-  window.showToast?.('Solicitando certificado a Let\'s Encrypt...');
+  window.showToast?.('Solicitando certificado SSL...');
   try {
     const res = await fetch('/api/nginx/issue-ssl', {
       method: 'POST',
@@ -546,14 +367,14 @@ async function issueSslForDomain(domain) {
       window.showToast?.('Certificado SSL instalado correctamente ꕤ');
       loadDomainList();
     } else {
-      showAppDialog('Fallo en Certbot SSL', d.error || 'Error al emitir certificado.', true);
+      showAppDialog('Fallo en Certbot SSL', d.error, true);
     }
   } catch (err) {
-    showAppDialog('Error de Red', err.message || 'No se pudo contactar al servidor para emitir el certificado.', true);
+    showAppDialog('Error de Red', err.message, true);
   }
 }
 
-async function deleteDomainConfig(domain) {
+window.deleteDomainConfig = async function (domain) {
   if (!confirm(`¿Eliminar la configuración completa de Nginx para ${domain}?`)) return;
 
   try {
@@ -561,6 +382,6 @@ async function deleteDomainConfig(domain) {
     window.showToast?.('Dominio eliminado de Nginx');
     loadDomainList();
   } catch (err) {
-    showAppDialog('Error', err.message || 'Error al eliminar dominio', true);
+    showAppDialog('Error', err.message, true);
   }
-}
+};
