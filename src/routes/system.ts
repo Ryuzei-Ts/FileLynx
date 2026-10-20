@@ -30,14 +30,19 @@ router.post('/update', async (req: Request, res: Response): Promise<void> => {
       await execAsync(`git remote set-url origin "${authUrl}"`, { cwd: projectRoot });
     }
 
-    const command = `git merge --abort 2>/dev/null || true && git fetch origin ${branch} && git reset --hard origin/${branch} && pm2 restart filelynx --update-env`;
-    const { stdout, stderr } = await execAsync(command, { cwd: projectRoot });
+    const pullCommand = `git merge --abort 2>/dev/null || true && git fetch origin ${branch} && git reset --hard origin/${branch}`;
+    const { stdout, stderr } = await execAsync(pullCommand, { cwd: projectRoot });
 
     res.json({
       success: true,
-      message: 'Actualización ejecutada exitosamente ꕤ',
+      message: 'Actualización descargada correctamente. Reiniciando servidor...',
       output: stdout || stderr,
     });
+
+    setTimeout(() => {
+      exec('pm2 restart filelynx --update-env', () => {});
+    }, 1000);
+
   } catch (err: any) {
     if (err.message && (err.message.includes('could not read Username') || err.message.includes('Authentication failed'))) {
       res.status(401).json({
